@@ -1,3 +1,7 @@
+
+> ⚠ **Legal Notice:** By cloning, downloading, or using this repository, you agree to the terms in `EULA.md`.  
+> If you do not agree, do **not** use this repository or any part of its contents.
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
