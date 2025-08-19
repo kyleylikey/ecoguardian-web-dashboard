@@ -1,73 +1,156 @@
-import { useState } from 'react'
-import './App.css'
+import { useState } from "react";
+import "./App.css";
+
+// Components
+import Topbar from "./components/Topbar";
+import NodesStatus from "./components/NodesStatus";
+import LastData from "./components/LastData";
+import ActiveAlerts from "./components/ActiveAlerts";
+import Export from "./components/Export";
+// import AlertsPanel from "./components/AlertsPanel";
+// import ReadingsTable from "./components/ReadingsTable";
 
 function App() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 7;
+
+  let nodes = [
+    { id: 1, name: "Node 1", active: true },
+    { id: 2, name: "Node 2", active: false },
+    { id: 3, name: "Node 3", active: true },
+    { id: 4, name: "Node 4", active: false },
+    { id: 5, name: "Node 5", active: false },
+    { id: 6, name: "Node 6", active: false }
+  ];
+
+  let alerts = [
+    {
+      id: 1,
+      type: "Wildfire Risk",
+      node: "Node 1",
+      date: "Fri, 4 Jul 2025",
+      time: "11:03:43 AM",
+    },
+  ];
+
+  let readings = [
+    {
+      timestamp: "Tue, 19 Aug 2025 7:02:00 PM",
+      sensorId: "Node 1",
+      temperature: 36,
+      humidity: 30,
+      coLevel: 48,
+    },
+    {
+      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
+      sensorId: "Node 2",
+      temperature: 30,
+      humidity: 81,
+      coLevel: 0.1,
+    },
+    {
+      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
+      sensorId: "Node 1",
+      temperature: 30,
+      humidity: 81,
+      coLevel: 0.1,
+    },
+    {
+      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
+      sensorId: "Node 1",
+      temperature: 30,
+      humidity: 81,
+      coLevel: 0.1,
+    },
+    {
+      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
+      sensorId: "Node 1",
+      temperature: 30,
+      humidity: 81,
+      coLevel: 0.1,
+    },
+    {
+      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
+      sensorId: "Node 1",
+      temperature: 30,
+      humidity: 81,
+      coLevel: 0.1,
+    },
+    {
+      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
+      sensorId: "Node 1",
+      temperature: 30,
+      humidity: 81,
+      coLevel: 0.1,
+    },
+    {
+      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
+      sensorId: "Node 1",
+      temperature: 30,
+      humidity: 81,
+      coLevel: 0.1,
+    },
+  ];
+
+  // Pagination 
+  const totalPages = Math.ceil(readings.length / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const currentReadings = readings.slice(startIndex, startIndex + rowsPerPage);
+
   return (
     <div className="card p-3">
+      <Topbar />
 
-      {/* top bar */}
-      <div className="topbar d-flex justify-content-between">
-        <div>EcoGuardian</div>
-        <div>
-          <span className="me-3">
-            System: <span className="text-success">Up</span>
-          </span>
-          <span>Uptime: 03h08m06s</span>
-        </div>
-      </div>
-
-      <div className="container-fluid mt-3">
+      <div className="container-fluid mt-3 p-0">
         <div className="row g-3">
-
-          {/* left col */}
-          <div className="col-lg-3">
+          {/* -------------------- Left Col -------------------- */}
+          <div className="col-lg-3 d-flex flex-column">
 
             {/* Nodes Status */}
-            <div className="card p-3 mb-3">
-              <h5>Nodes Status</h5>
-              <p>All nodes are active</p>
-              <p><span className="status-dot"></span>Node 1</p>
-              <p><span className="status-dot"></span>Node 2</p>
+            <div className="card p-3 mb-3 sub_card rounded">
+              <NodesStatus nodes={nodes} />
+            </div>
+            {/* Last Data Received */}
+            <div className="card p-3 mb-3 sub_card rounded">
+              <LastData readings={readings} />
+            </div>
+            {/* Environmental Readings */}
+            <div className="card p-3 mb-3 sub_card rounded">
+              <ActiveAlerts alerts={alerts} />
             </div>
 
-            {/* last data received */}
-            <div className="card p-3 mb-3">
-              <h6>Last Data Received</h6>
-              <p><em>10:20:13 AM</em></p>
-            </div>
-
-            {/* active alerts */}
-            <div className="card p-3 mb-3">
-              <h6>Active Alerts</h6>
-              <p>1</p>
-            </div>
-
-            {/* export log */}
-            <div className="card p-3 text-center">
-              <h6>Export Log</h6>
-              <button className="btn btn-light">
-                <i className="bi bi-download"></i> Download
-              </button>
-            </div>
-          </div>
-
-          {/* right col */}
-          <div className="col-lg-9">
-            
-            {/* Alert Panel */}
-            <div className="card p-3 mb-3">
-              <h5>Alert Panel</h5>
-              <div className="p-3 bg-white rounded">
-                <strong>Wildfire Risk</strong> <span className="text-muted">Node 1</span><br />
-                Fri, 4 Jul 2025<br />
-                11:03:43 AM
+            {/* Export */}
+            <div className="mt-auto">
+              <div className="card p-3 export_card">
+                <Export />
               </div>
             </div>
+          </div>
+          {/* -------------------- Left Col End -------------------- */}
 
-            {/* environmental readings */}
-            <div className="card p-3">
-              <h5>Environmental Readings</h5>
-              <div className="table-responsive">
+          {/* -------------------- Right Col -------------------- */}
+          <div className="col-lg-9 d-flex flex-column">
+
+            {/* Alerts */}
+            <div className="card p-3 mb-3 sub_card">
+              <h4 className="subcard_name text-dark">Alert Panel</h4>
+              
+              {alerts.map((alert) => (
+                <div key={alert.id} className="p-3 bg-white rounded mb-2">
+                  <strong>{alert.type}</strong>{" "}
+                  <span className="text-muted">{alert.node}</span>
+                  <br />
+                  {alert.date}
+                  <br />
+                  {alert.time}
+                </div>
+              ))}
+            </div>
+
+            {/* Environmental Readings */}
+            <div className="card p-3 sub_card flex-grow-1 d-flex flex-column">
+              <h4 className="subcard_name text-dark">Environmental Readings</h4>
+              <div className="table-responsive flex-grow-1 rounded">
                 <table className="table table-borderless">
                   <thead>
                     <tr>
@@ -79,51 +162,42 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>Fri, 4 Jul 2025 11:03:43 AM</td>
-                      <td>Node 1</td>
-                      <td>36</td>
-                      <td>30</td>
-                      <td>48</td>
-                    </tr>
-                    <tr>
-                      <td>Fri, 4 Jul 2025 10:58:11 AM</td>
-                      <td>Node 2</td>
-                      <td>30</td>
-                      <td>81</td>
-                      <td>0.1</td>
-                    </tr>
-                    <tr>
-                      <td>Fri, 4 Jul 2025 10:58:11 AM</td>
-                      <td>Node 1</td>
-                      <td>30</td>
-                      <td>81</td>
-                      <td>0.1</td>
-                    </tr>
-                    <tr>
-                      <td>Fri, 4 Jul 2025 10:58:11 AM</td>
-                      <td>Node 2</td>
-                      <td>30</td>
-                      <td>81</td>
-                      <td>0.1</td>
-                    </tr>
-                    <tr>
-                      <td>Fri, 4 Jul 2025 10:58:11 AM</td>
-                      <td>Node 1</td>
-                      <td>30</td>
-                      <td>81</td>
-                      <td>0.1</td>
-                    </tr>
+                    {currentReadings.map((r, index) => (
+                      <tr key={index}>
+                        <td>{r.timestamp}</td>
+                        <td>{r.sensorId}</td>
+                        <td>{r.temperature}</td>
+                        <td>{r.humidity}</td>
+                        <td>{r.coLevel}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-              <div className="d-flex justify-content-center">
-                <button className="btn btn-light me-2">&larr;</button>
-                <span>1</span>
-                <button className="btn btn-light ms-2">&rarr;</button>
+
+              {/* Paginatoin Controls */}
+              <div className="d-flex justify-content-center mt-3">
+                <button
+                  className="btn btn-light me-2"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                >
+                  &larr;
+                </button>
+                <span>
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  className="btn btn-light ms-2"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                >
+                  &rarr;
+                </button>
               </div>
             </div>
           </div>
+          {/* -------------------- Right Col End -------------------- */}
 
         </div>
       </div>

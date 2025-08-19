@@ -1,8 +1,49 @@
+:root {
+    --primary: #66a80f;
+    --background-light: #f4fce3;
+    --sub-card: #e6efd3;
+
+}
+
 body {
-            background-color: #f8f6fa;
+            background-color: var(--background-light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
+        .topbar {
+            background-color: var(--primary);
+            padding: 15px 20px;
+            font-weight: 600;
+        }
+        .nodes-list {
+        max-height: 250px; /* enough space for ~4 nodes */
+        overflow-y: auto;
+        padding-right: 5px; /* prevent scrollbar overlap */
+        }
+
+        /* Optional: make scrollbar look nice */
+        .nodes-list::-webkit-scrollbar {
+        width: 6px;
+        }
+
+        .nodes-list::-webkit-scrollbar-thumb {
+        background-color: #ccc;
+        border-radius: 3px;
+        }
+
         .card {
-            background-color: #f3edf8;
+            background-color: var(--main-card);
+            border: none;
+        }
+        .sub_card {
+            background-color: var(--sub-card);
+            border: none;
+        }
+        .title, .subcard_name {
+            font-weight: 600;
+        }
+        .export_card {
+            background-color: var(--primary);
+            color: #fff;
             border: none;
         }
         .status-dot {
@@ -13,8 +54,5 @@ body {
             display: inline-block;
             margin-right: 5px;
         }
-        .topbar {
-            background-color: #e8dfef;
-            padding: 10px 20px;
-            font-weight: bold;
-        }
+        
+        
