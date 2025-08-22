@@ -1,9 +1,9 @@
 export default function ActiveAlerts({ alerts }) {
     return (
         <div>
-            <h4 className="subcard_name text-dark">Active Alerts</h4>
+            <p className="subcard_name text-dark">Active Alerts</p>
             
-            <p>{alerts.length}</p>
+            <p className="text-muted fw-semibold fst-italic">{alerts.length}</p>
         </div>
     );
 }

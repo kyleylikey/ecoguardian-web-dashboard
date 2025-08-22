@@ -1,26 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Parkinsans:wght@300..800&display=swap');
+
 :root {
     --primary: #66a80f;
-    --background-light: #f4fce3;
-    --sub-card: #e6efd3;
+    --background: #f8f9fa;
+    --sub-card: #fff;
 
 }
 
 body {
-            background-color: var(--background-light);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background);
+            font-family: "Parkinsans", sans-serif;
         }
+
+        .card {
+            background-color: var(--main-card);
+            border: none;
+        }
+
+        .sub_card {
+            background-color: var(--sub-card);
+            border: none;
+        }
+
+        .title, .subcard_name {
+            font-weight: 550;
+            font-size: larger;
+        }
+
+        th {
+            font-weight: 550;
+        }
+
+        /* -------------- Topbar -------------- */
         .topbar {
             background-color: var(--primary);
             padding: 15px 20px;
             font-weight: 600;
         }
+
+        /* -------------- Nodes Status -------------- */
         .nodes-list {
-        max-height: 250px; /* enough space for ~4 nodes */
+        max-height: 225px; /* or whatever height you want */
         overflow-y: auto;
-        padding-right: 5px; /* prevent scrollbar overlap */
+        cursor: grab;
         }
 
-        /* Optional: make scrollbar look nice */
+        .nodes-list.active {
+        cursor: grabbing;
+        user-select: none; /* prevent text highlighting while dragging */
+        }
+
+        /*make scrollbar look nice */
         .nodes-list::-webkit-scrollbar {
         width: 6px;
         }
@@ -30,22 +60,6 @@ body {
         border-radius: 3px;
         }
 
-        .card {
-            background-color: var(--main-card);
-            border: none;
-        }
-        .sub_card {
-            background-color: var(--sub-card);
-            border: none;
-        }
-        .title, .subcard_name {
-            font-weight: 600;
-        }
-        .export_card {
-            background-color: var(--primary);
-            color: #fff;
-            border: none;
-        }
         .status-dot {
             height: 10px;
             width: 10px;
@@ -54,5 +68,60 @@ body {
             display: inline-block;
             margin-right: 5px;
         }
-        
+
+        /* -------------- Alerts Panel -------------- */
+        .alert_card {
+        width: 18rem;
+        flex: 0 0 auto;
+        margin-right: 0.5rem;
+        }
+
+        .alerts-list {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        cursor: grab;
+        }
+
+        .alerts-list.active {
+        cursor: grabbing;
+        user-select: none; /* prevent text highlighting while dragging */
+        }
+
+        /* Optional: nice horizontal scrollbar */
+        .alerts-list::-webkit-scrollbar {
+        height: 6px;
+        }
+
+        .alerts-list::-webkit-scrollbar-thumb {
+        background-color: #ccc;
+        border-radius: 3px;
+        }
+
+        .alert-red {
+        background-color: #f8d7da;
+        border: 1px solid #f5c2c7;
+        color: #842029;
+        }
+
+        .alert-yellow {
+        background-color: #fff3cd;
+        border: 1px solid #ffecb5;
+        color: #664d03;
+        }
+
+        /* -------------- Environmental Readings -------------- */
+        .readings_btns {
+            background-color: var(--primary);
+            color: #fff;
+        }
+
+        /* -------------- Export -------------- */
+        .export_card {
+            background-color: var(--primary);
+            color: #fff;
+            border: none;
+        }
+
         

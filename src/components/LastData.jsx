@@ -40,9 +40,9 @@ export default function LastData({ readings }) {
 
   return (
     <div>
-      <h4 className="subcard_name text-dark">Last Data Received</h4>
-      <p>
-        <em>{elapsed}</em>
+      <p className="subcard_name text-dark">Last Data Received</p>
+      <p className="text-muted fw-semibold fst-italic">
+        {elapsed}
       </p>
     </div>
   );

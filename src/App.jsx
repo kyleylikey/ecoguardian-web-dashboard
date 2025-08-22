@@ -7,7 +7,7 @@ import NodesStatus from "./components/NodesStatus";
 import LastData from "./components/LastData";
 import ActiveAlerts from "./components/ActiveAlerts";
 import Export from "./components/Export";
-// import AlertsPanel from "./components/AlertsPanel";
+import AlertsPanel from "./components/AlertsPanel";
 // import ReadingsTable from "./components/ReadingsTable";
 
 function App() {
@@ -31,11 +31,46 @@ function App() {
       date: "Fri, 4 Jul 2025",
       time: "11:03:43 AM",
     },
+    {
+      id: 2,
+      type: "Illegal Logging",
+      node: "Node 2",
+      date: "Fri, 4 Aug 2025",
+      time: "11:03:43 AM",
+    },
+    {
+      id: 3,
+      type: "Poaching",
+      node: "Node 1",
+      date: "Fri, 4 Aug 2025",
+      time: "11:03:43 AM",
+    },
+    {
+      id: 5,
+      type: "Wildfire Risk",
+      node: "Node 1",
+      date: "Fri, 4 Jul 2025",
+      time: "11:03:43 AM",
+    },
+    {
+      id: 6,
+      type: "Wildfire Risk",
+      node: "Node 1",
+      date: "Fri, 4 Jul 2025",
+      time: "11:03:43 AM",
+    },
+    {
+      id: 7,
+      type: "Illegal Logging",
+      node: "Node 2",
+      date: "Fri, 4 Aug 2025",
+      time: "11:03:43 AM",
+    },
   ];
 
   let readings = [
     {
-      timestamp: "Tue, 19 Aug 2025 7:02:00 PM",
+      timestamp: "Fri, 22 Aug 2025 8:02:00 AM",
       sensorId: "Node 1",
       temperature: 36,
       humidity: 30,
@@ -133,25 +168,14 @@ function App() {
 
             {/* Alerts */}
             <div className="card p-3 mb-3 sub_card">
-              <h4 className="subcard_name text-dark">Alert Panel</h4>
-              
-              {alerts.map((alert) => (
-                <div key={alert.id} className="p-3 bg-white rounded mb-2">
-                  <strong>{alert.type}</strong>{" "}
-                  <span className="text-muted">{alert.node}</span>
-                  <br />
-                  {alert.date}
-                  <br />
-                  {alert.time}
-                </div>
-              ))}
+              <AlertsPanel alerts={alerts} />
             </div>
 
             {/* Environmental Readings */}
             <div className="card p-3 sub_card flex-grow-1 d-flex flex-column">
               <h4 className="subcard_name text-dark">Environmental Readings</h4>
               <div className="table-responsive flex-grow-1 rounded">
-                <table className="table table-borderless">
+                <table className="table table-boderless table-hover">
                   <thead>
                     <tr>
                       <th>Timestamp</th>
@@ -164,21 +188,21 @@ function App() {
                   <tbody>
                     {currentReadings.map((r, index) => (
                       <tr key={index}>
-                        <td>{r.timestamp}</td>
-                        <td>{r.sensorId}</td>
-                        <td>{r.temperature}</td>
-                        <td>{r.humidity}</td>
-                        <td>{r.coLevel}</td>
+                        <td className="text-muted">{r.timestamp}</td>
+                        <td className="text-muted">{r.sensorId}</td>
+                        <td className="text-muted">{r.temperature}</td>
+                        <td className="text-muted">{r.humidity}</td>
+                        <td className="text-muted">{r.coLevel}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {/* Paginatoin Controls */}
+              {/* Pagination Controls */}
               <div className="d-flex justify-content-center mt-3">
                 <button
-                  className="btn btn-light me-2"
+                  className="btn me-2 readings_btns"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage((p) => p - 1)}
                 >
@@ -188,7 +212,7 @@ function App() {
                   {currentPage} / {totalPages}
                 </span>
                 <button
-                  className="btn btn-light ms-2"
+                  className="btn ms-2 readings_btns"
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage((p) => p + 1)}
                 >
