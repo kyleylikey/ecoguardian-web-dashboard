@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 
 // Components
@@ -68,67 +68,18 @@ function App() {
     },
   ];
 
-  let readings = [
-    {
-      timestamp: "Fri, 22 Aug 2025 8:02:00 AM",
-      sensorId: "Node 1",
-      temperature: 36,
-      humidity: 30,
-      coLevel: 48,
-    },
-    {
-      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
-      sensorId: "Node 2",
-      temperature: 30,
-      humidity: 81,
-      coLevel: 0.1,
-    },
-    {
-      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
-      sensorId: "Node 1",
-      temperature: 30,
-      humidity: 81,
-      coLevel: 0.1,
-    },
-    {
-      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
-      sensorId: "Node 1",
-      temperature: 30,
-      humidity: 81,
-      coLevel: 0.1,
-    },
-    {
-      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
-      sensorId: "Node 1",
-      temperature: 30,
-      humidity: 81,
-      coLevel: 0.1,
-    },
-    {
-      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
-      sensorId: "Node 1",
-      temperature: 30,
-      humidity: 81,
-      coLevel: 0.1,
-    },
-    {
-      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
-      sensorId: "Node 1",
-      temperature: 30,
-      humidity: 81,
-      coLevel: 0.1,
-    },
-    {
-      timestamp: "Fri, 4 Jul 2025 10:58:11 AM",
-      sensorId: "Node 1",
-      temperature: 30,
-      humidity: 81,
-      coLevel: 0.1,
-    },
-  ];
+    // --- Readings API call ---
+  const [readings, setReadings] = useState([]);
+
+  useEffect(() => {
+    fetch("http://localhost:3000/api/readings")
+      .then((res) => res.json())
+      .then((data) => setReadings(data.data))
+      .catch((err) => console.error("❌ Error fetching readings:", err));
+  }, []);
 
   // Pagination 
-  const totalPages = Math.ceil(readings.length / rowsPerPage);
+  const totalPages = Math.ceil(readings.length / rowsPerPage) || 1;
   const startIndex = (currentPage - 1) * rowsPerPage;
   const currentReadings = readings.slice(startIndex, startIndex + rowsPerPage);
 
@@ -189,10 +140,10 @@ function App() {
                     {currentReadings.map((r, index) => (
                       <tr key={index}>
                         <td className="text-muted">{r.timestamp}</td>
-                        <td className="text-muted">{r.sensorId}</td>
+                        <td className="text-muted">{r.nodeID}</td>
                         <td className="text-muted">{r.temperature}</td>
                         <td className="text-muted">{r.humidity}</td>
-                        <td className="text-muted">{r.coLevel}</td>
+                        <td className="text-muted">{r.co_level}</td>
                       </tr>
                     ))}
                   </tbody>
