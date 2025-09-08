@@ -3,10 +3,10 @@ import "./App.css";
 
 // Components
 import Topbar from "./components/Topbar";
+import Sidebar from "./components/Sidebar";
 import NodesStatus from "./components/NodesStatus";
 import LastData from "./components/LastData";
 import ActiveAlerts from "./components/ActiveAlerts";
-import Export from "./components/Export";
 import AlertsPanel from "./components/AlertsPanel";
 // import ReadingsTable from "./components/ReadingsTable";
 
@@ -138,7 +138,18 @@ function App() {
 
       <div className="container-fluid mt-3 p-0">
         <div className="row g-3">
-          {/* -------------------- Left Col -------------------- */}
+          {/* -------------------- 1st Col -------------------- */}
+          <div className="col-lg-2 d-flex flex-column">
+
+            {/* Sidebar */}
+            <div className="card p-3 mb-3 sub_card rounded">
+              <Sidebar />
+            </div>
+            
+          </div>
+          {/* -------------------- 1st Col End -------------------- */}
+
+          {/* -------------------- 2nd Col -------------------- */}
           <div className="col-lg-3 d-flex flex-column">
 
             {/* Nodes Status */}
@@ -154,17 +165,11 @@ function App() {
               <ActiveAlerts alerts={alerts} />
             </div>
 
-            {/* Export */}
-            <div className="mt-auto">
-              <div className="card p-3 export_card">
-                <Export />
-              </div>
-            </div>
           </div>
-          {/* -------------------- Left Col End -------------------- */}
+          {/* -------------------- 2nd Col End -------------------- */}
 
-          {/* -------------------- Right Col -------------------- */}
-          <div className="col-lg-9 d-flex flex-column">
+          {/* -------------------- 3rd Col -------------------- */}
+          <div className="col-lg-7 d-flex flex-column">
 
             {/* Alerts */}
             <div className="card p-3 mb-3 sub_card">
@@ -173,7 +178,7 @@ function App() {
 
             {/* Environmental Readings */}
             <div className="card p-3 sub_card flex-grow-1 d-flex flex-column">
-              <h4 className="subcard_name text-dark">Environmental Readings</h4>
+              <p className="subcard_name text-muted">Today's Environmental Readings</p>
               <div className="table-responsive flex-grow-1 rounded">
                 <table className="table table-boderless table-hover">
                   <thead>
@@ -221,7 +226,7 @@ function App() {
               </div>
             </div>
           </div>
-          {/* -------------------- Right Col End -------------------- */}
+          {/* -------------------- 3rd Col End -------------------- */}
 
         </div>
       </div>

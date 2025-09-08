@@ -1,9 +1,9 @@
 export default function Export() {
   return (
-    <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center">
-        <p className="subcard_name text-light mb-2 mb-sm-0">Export Log</p>
+    <div>
+        <p className="subcard_name text-dark mb-2 mb-sm-0">Export Log</p>
 
-        <button className="btn btn-light">
+        <button className="btn export_btn d-flex align-items-center justify-content-center gap-2 w-full w-sm-auto">
             <i className="bi bi-download"></i> Download PDF
         </button>
     </div>
