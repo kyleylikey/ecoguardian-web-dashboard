@@ -1,50 +1,85 @@
+import { useEffect, useState } from "react";
+import { Modal, Button } from "react-bootstrap";
+
 export default function OpenAlert({ show, onHide, alert }) {
-  if (!show) return null;
+ const [elapsed, setElapsed] = useState("00");
 
-  return (
-    <div
-      className={`modal fade show`}
-      style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}
-      tabIndex="-1"
-      role="dialog"
-      aria-labelledby="exampleModalCenterTitle"
-      aria-hidden={!show}
-    >
-      <div className="modal-dialog modal-dialog-centered" role="document">
-        <div className="modal-content">
-          {/* Modal Header */}
-          <div className="modal-header">
-            <h5 className="modal-title" id="exampleModalLongTitle">
-              {alert?.type || "Alert"}
-            </h5>
-            <button
-              type="button"
-              className="close"
-              onClick={onHide}
-              aria-label="Close"
-            >
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
+ useEffect(() => {
+   if (!alert) return;
 
-          {/* Modal Body */}
-          <div className="modal-body">
-            <p><strong>Node:</strong> {alert?.node}</p>
-            <p><strong>Date:</strong> {alert?.date}</p>
-            <p><strong>Time:</strong> {alert?.time}</p>
-          </div>
+   const alertTime = new Date(`${alert.date} ${alert.time}`).getTime();
 
-          {/* Modal Footer */}
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onHide}>
-              Close
-            </button>
-            <button type="button" className="btn btn-primary">
-              Save changes
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+   const timer = setInterval(() => {
+     const now = Date.now();
+     const diff = Math.floor((now - alertTime) / 1000);
+
+     const hours = Math.floor(diff / 3600);
+     const minutes = Math.floor((diff % 3600) / 60);
+     const seconds = diff % 60;
+
+     let formatted;
+     if (hours > 0) {
+       formatted =
+         String(hours).padStart(2, "0") +
+         ":" +
+         String(minutes).padStart(2, "0") +
+         ":" +
+         String(seconds).padStart(2, "0");
+     } else if (minutes > 0) {
+       formatted =
+         String(minutes).padStart(2, "0") +
+         ":" +
+         String(seconds).padStart(2, "0");
+     } else {
+       formatted = String(seconds).padStart(2, "0");
+     }
+
+     setElapsed(formatted);
+   }, 1000);
+
+   return () => clearInterval(timer);
+ }, [alert]);
+
+ if (!alert) return null;
+
+ let headerClass = "bg-secondary text-white";
+ let icon = "⚠️";
+
+ if (alert.type === "Wildfire Risk") {
+   headerClass = "bg-danger text-white";
+   icon = "🔥";
+ } else if (alert.type === "Illegal Logging") {
+   headerClass = "bg-warning text-dark";
+   icon = "🌲";
+ } else if (alert.type === "Poaching") {
+   headerClass = "bg-warning text-dark";
+   icon = "🐾";
+ }
+
+ return (
+   <Modal show={show} onHide={onHide} centered>
+     <Modal.Header closeButton className={headerClass}>
+       <Modal.Title>
+         {icon} {alert.type}
+       </Modal.Title>
+     </Modal.Header>
+     <Modal.Body>
+       <p>
+         <strong>Node:</strong> {alert.node}
+       </p>
+       <p>
+         <strong>Detected at:</strong> {alert.date} {alert.time}
+       </p>
+       <p>
+         <strong>Elapsed time:</strong> {elapsed}
+       </p>
+     </Modal.Body>
+     <Modal.Footer>
+       <Button variant="secondary" onClick={onHide}>
+         Close
+       </Button>
+       <Button variant="primary">Resolve</Button>
+     </Modal.Footer>
+   </Modal>
+ );
 }

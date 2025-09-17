@@ -1,5 +1,7 @@
+// src/App.jsx
 import { useState, useEffect } from "react";
 import "./App.css";
+import "bootstrap/dist/css/bootstrap.min.css";
 
 // Components
 import Topbar from "./components/Topbar";
@@ -8,178 +10,110 @@ import NodesStatus from "./components/NodesStatus";
 import LastData from "./components/LastData";
 import ActiveAlerts from "./components/ActiveAlerts";
 import AlertsPanel from "./components/AlertsPanel";
-// import ReadingsTable from "./components/ReadingsTable";
+import ReadingsPanel from "./components/ReadingsPanel";
+
+// Pages
+import AlertsPage from "./Pages/AlertsPage";
+import EnvironmentalReadingsPage from "./pages/ReadingsPage";
 
 function App() {
-  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedPage, setSelectedPage] = useState("dashboard"); //dashboard | alerts | readings
   const rowsPerPage = 7;
 
-  let nodes = [
+  const nodes = [
     { id: 1, name: "Node 1", active: true },
     { id: 2, name: "Node 2", active: false },
-    { id: 3, name: "Node 3", active: true },
-    { id: 4, name: "Node 4", active: false },
-    { id: 5, name: "Node 5", active: false },
-    { id: 6, name: "Node 6", active: false }
+    { id: 3, name: "Node 3", active: false },
+    { id: 4, name: "Node 4", active: true },
+    { id: 5, name: "Node 5", active: true },
+    { id: 6, name: "Node 6", active: false },
+    { id: 7, name: "Node 7", active: true },
   ];
 
-  let alerts = [
-    {
-      id: 1,
-      type: "Wildfire Risk",
-      node: "Node 1",
-      date: "Fri, 4 Jul 2025",
-      time: "11:03:43 AM",
-    },
-    {
-      id: 2,
-      type: "Illegal Logging",
-      node: "Node 2",
-      date: "Fri, 4 Aug 2025",
-      time: "11:03:43 AM",
-    },
-    {
-      id: 3,
-      type: "Poaching",
-      node: "Node 1",
-      date: "Fri, 4 Aug 2025",
-      time: "11:03:43 AM",
-    },
-    {
-      id: 5,
-      type: "Wildfire Risk",
-      node: "Node 1",
-      date: "Fri, 4 Jul 2025",
-      time: "11:03:43 AM",
-    },
-    {
-      id: 6,
-      type: "Wildfire Risk",
-      node: "Node 1",
-      date: "Fri, 4 Jul 2025",
-      time: "11:03:43 AM",
-    },
-    {
-      id: 7,
-      type: "Illegal Logging",
-      node: "Node 2",
-      date: "Fri, 4 Aug 2025",
-      time: "11:03:43 AM",
-    },
-  ];
-
-    // --- Readings API call ---
+  // readings first
   const [readings, setReadings] = useState([]);
-
   useEffect(() => {
     fetch("http://localhost:3000/api/readings")
       .then((res) => res.json())
-      .then((data) => setReadings(data.data))
+      .then((data) => setReadings(data.data || []))
       .catch((err) => console.error("❌ Error fetching readings:", err));
   }, []);
 
-  // Pagination 
-  const totalPages = Math.ceil(readings.length / rowsPerPage) || 1;
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const currentReadings = readings.slice(startIndex, startIndex + rowsPerPage);
+  // then alerts
+  const [alerts, setAlerts] = useState([]);
+
+  const checkWildfireRisk = (reading) => {
+    return (
+      reading.temperature > 30 &&
+      reading.humidity < 60 &&
+      reading.co_level > 10
+    );
+  };
+
+  useEffect(() => {
+    if (!readings || readings.length === 0) return;
+
+    const generatedAlerts = readings
+      .filter(checkWildfireRisk)
+      .map((r, index) => ({
+        id: index + 1,
+        icon: "🔥",
+        type: "Wildfire Risk",
+        node: `Node ${r.nodeID}`,
+        date: new Date(r.timestamp).toDateString(),
+        time: new Date(r.timestamp).toLocaleTimeString(),
+      }));
+
+    setAlerts(generatedAlerts);
+  }, [readings]);
 
   return (
-    <div className="card p-3">
+    <div className="container-fluid p-0">
       <Topbar />
 
-      <div className="container-fluid mt-3 p-0">
-        <div className="row g-3">
-          {/* -------------------- 1st Col -------------------- */}
-          <div className="col-lg-2 d-flex flex-column">
+      <div className="row no-gutters">
+        <Sidebar selectedPage={selectedPage} onSelect={setSelectedPage} />
 
-            {/* Sidebar */}
-            <div className="card p-3 mb-3 sub_card rounded">
-              <Sidebar />
-            </div>
-            
-          </div>
-          {/* -------------------- 1st Col End -------------------- */}
-
-          {/* -------------------- 2nd Col -------------------- */}
-          <div className="col-lg-3 d-flex flex-column">
-
-            {/* Nodes Status */}
-            <div className="card p-3 mb-3 sub_card rounded">
-              <NodesStatus nodes={nodes} />
-            </div>
-            {/* Last Data Received */}
-            <div className="card p-3 mb-3 sub_card rounded">
-              <LastData readings={readings} />
-            </div>
-            {/* Environmental Readings */}
-            <div className="card p-3 mb-3 sub_card rounded">
-              <ActiveAlerts alerts={alerts} />
-            </div>
-
-          </div>
-          {/* -------------------- 2nd Col End -------------------- */}
-
-          {/* -------------------- 3rd Col -------------------- */}
-          <div className="col-lg-7 d-flex flex-column">
-
-            {/* Alerts */}
-            <div className="card p-3 mb-3 sub_card">
-              <AlertsPanel alerts={alerts} />
-            </div>
-
-            {/* Environmental Readings */}
-            <div className="card p-3 sub_card flex-grow-1 d-flex flex-column">
-              <p className="subcard_name text-muted">Today's Environmental Readings</p>
-              <div className="table-responsive flex-grow-1 rounded">
-                <table className="table table-boderless table-hover">
-                  <thead>
-                    <tr>
-                      <th>Timestamp</th>
-                      <th>Sensor ID</th>
-                      <th>Temperature (°C)</th>
-                      <th>Humidity (%)</th>
-                      <th>CO Level (ppm)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currentReadings.map((r, index) => (
-                      <tr key={index}>
-                        <td className="text-muted">{r.timestamp}</td>
-                        <td className="text-muted">{r.nodeID}</td>
-                        <td className="text-muted">{r.temperature}</td>
-                        <td className="text-muted">{r.humidity}</td>
-                        <td className="text-muted">{r.co_level}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        <main className="col-md-9 ms-sm-auto col-lg-10 px-md-4 offset-md-2">
+          {/* state-based page switch */}
+          {selectedPage === "dashboard" && (
+            <div className="row g-3 mt-3">
+              <div className="col-lg-3 d-flex flex-column">
+                <div className="card p-3 mb-3 sub_card">
+                  <p className="subcard_name text-muted mb-2">Sensor Nodes Status</p>
+                  <NodesStatus nodes={nodes} />
+                </div>
+                <div className="card p-3 mb-3 sub_card">
+                  <p className="subcard_name text-muted mb-2">Last Data Reading</p>
+                  <LastData readings={readings} />
+                </div>
+                <div className="card p-3 sub_card flex-grow-1 d-flex flex-column">
+                  <p className="subcard_name text-muted mb-2">Active Alerts</p>
+                  <ActiveAlerts alerts={alerts} />
+                </div>
               </div>
 
-              {/* Pagination Controls */}
-              <div className="d-flex justify-content-center mt-3">
-                <button
-                  className="btn me-2 readings_btns"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                >
-                  &larr;
-                </button>
-                <span>
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  className="btn ms-2 readings_btns"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                >
-                  &rarr;
-                </button>
-              </div>
-            </div>
-          </div>
-          {/* -------------------- 3rd Col End -------------------- */}
+              <div className="col-lg-9 d-flex flex-column">
+                <div className="card p-3 mb-3 sub_card">
+                  <p className="subcard_name text-muted mb-2">New Alerts</p>
+                  <AlertsPanel alerts={alerts} />
+                </div>
 
-        </div>
+                <div className="card p-3 mb-3 sub_card">
+                  <p className="subcard_name text-muted mb-2">Environmental Readings</p>
+                  <ReadingsPanel readings={readings} />
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {selectedPage === "alerts" && <AlertsPage alerts={alerts} />}
+
+          {selectedPage === "readings" && (
+            <EnvironmentalReadingsPage readings={readings} rowsPerPage={rowsPerPage} />
+          )}
+        </main>
       </div>
     </div>
   );

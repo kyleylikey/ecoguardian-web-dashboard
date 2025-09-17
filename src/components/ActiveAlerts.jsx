@@ -1,9 +1,7 @@
 export default function ActiveAlerts({ alerts }) {
-    return (
-        <div>
-            <p className="subcard_name text-dark">Active Alerts</p>
-            
-            <p className="text-muted fw-semibold fst-italic">{alerts.length}</p>
-        </div>
-    );
+  return (
+    <ul className="flex-grow-1 overflow-auto p-0">
+      <p className="fst-italic">{alerts.length}</p>
+    </ul>
+  );
 }

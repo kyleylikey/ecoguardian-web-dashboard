@@ -1,21 +1,20 @@
 import { useEffect, useState } from "react";
 
 export default function LastData({ readings }) {
-  const [elapsed, setElapsed] = useState("N/A");
+  const [elapsed, setElapsed] = useState("");
 
   useEffect(() => {
     if (!readings || readings.length === 0) return;
 
-    // Try to parse timestamp safely
-    const lastTimestamp = readings[0].timestamp;
-    let lastDate = new Date(lastTimestamp);
-
-    // If it's in "YYYY-MM-DD HH:mm:ss" format, adjust for safe parsing
-    if (isNaN(lastDate)) {
-      lastDate = new Date(lastTimestamp.replace(" ", "T"));
-    }
-
     function updateElapsed() {
+      const last = readings[readings.length - 1];
+      if (!last) return;
+
+      let lastDate = new Date(last.timestamp);
+      if (isNaN(lastDate)) {
+        lastDate = new Date(last.timestamp.replace(" ", "T"));
+      }
+
       const now = new Date();
       const diffMs = now - lastDate;
 
@@ -33,17 +32,18 @@ export default function LastData({ readings }) {
       }
     }
 
-    updateElapsed();
+    updateElapsed(); // Run once immediately
     const interval = setInterval(updateElapsed, 60000);
     return () => clearInterval(interval);
   }, [readings]);
 
+  if (!readings || readings.length === 0) {
+    return <p className="text-muted">No readings yet</p>;
+  }
+
   return (
-    <div>
-      <p className="subcard_name text-dark">Last Data Received</p>
-      <p className="text-muted fw-semibold fst-italic">
-        {elapsed}
-      </p>
-    </div>
+    <>
+      <p className="mb-1 fst-italic">{elapsed}</p>
+    </>
   );
 }
