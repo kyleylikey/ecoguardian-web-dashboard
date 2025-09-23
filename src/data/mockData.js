@@ -7,6 +7,7 @@ export const mockDataAlerts = [
     node: "Node 1",
     timestamp: "2023-10-01 12:00 PM",
     severity: "Moderate",
+    res_ack_timestamp: "",
     status: "Active",
   },
   {
@@ -14,6 +15,7 @@ export const mockDataAlerts = [
     type: "Illegal Logging",
     node: "Node 2",
     timestamp: "2023-10-02 1:00 PM",
+    res_ack_timestamp: "",
     status: "Active",
   },
   {
@@ -21,6 +23,7 @@ export const mockDataAlerts = [
     type: "Poaching",
     node: "Node 3",
     timestamp: "2023-10-03 2:00 PM",
+    res_ack_timestamp: "",
     status: "Active",
   },
   {
@@ -29,21 +32,24 @@ export const mockDataAlerts = [
     node: "Node 1",
     timestamp: "2023-10-01 12:00 PM",
     severity: "High",
-    status: "Resolved",
+    res_ack_timestamp: "",
+    status: "Active",
   },
   {
     id: 5,
     type: "Illegal Logging",
     node: "Node 2",
     timestamp: "2023-10-02 1:00 PM",
-    status: "Resolved",
+    res_ack_timestamp: "",
+    status: "Active",
   },
   {
     id: 6,
     type: "Poaching",
     node: "Node 3",
     timestamp: "2023-10-03 2:00 PM",
-    status: "Resolved",
+    res_ack_timestamp: "",
+    status: "Active",
   },
   {
     id: 7,
@@ -51,6 +57,7 @@ export const mockDataAlerts = [
     node: "Node 1",
     timestamp: "2023-10-01 12:00 PM",
     severity: "Low",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -58,6 +65,7 @@ export const mockDataAlerts = [
     type: "Illegal Logging",
     node: "Node 2",
     timestamp: "2023-10-02 1:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -65,6 +73,7 @@ export const mockDataAlerts = [
     type: "Poaching",
     node: "Node 3",
     timestamp: "2023-10-03 2:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -73,6 +82,7 @@ export const mockDataAlerts = [
     node: "Node 1",
     timestamp: "2023-10-01 12:00 PM",
     severity: "Low",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -80,6 +90,7 @@ export const mockDataAlerts = [
     type: "Illegal Logging",
     node: "Node 2",
     timestamp: "2023-10-02 1:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -87,6 +98,7 @@ export const mockDataAlerts = [
     type: "Poaching",
     node: "Node 3",
     timestamp: "2023-10-03 2:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -95,6 +107,7 @@ export const mockDataAlerts = [
     node: "Node 1",
     timestamp: "2023-10-01 12:00 PM",
     severity: "Low",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -102,6 +115,7 @@ export const mockDataAlerts = [
     type: "Illegal Logging",
     node: "Node 2",
     timestamp: "2023-10-02 1:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -109,6 +123,7 @@ export const mockDataAlerts = [
     type: "Poaching",
     node: "Node 3",
     timestamp: "2023-10-03 2:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -117,6 +132,7 @@ export const mockDataAlerts = [
     node: "Node 1",
     timestamp: "2023-10-01 12:00 PM",
     severity: "Low",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -124,6 +140,7 @@ export const mockDataAlerts = [
     type: "Illegal Logging",
     node: "Node 2",
     timestamp: "2023-10-02 1:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -131,6 +148,7 @@ export const mockDataAlerts = [
     type: "Poaching",
     node: "Node 3",
     timestamp: "2023-10-03 2:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -139,6 +157,7 @@ export const mockDataAlerts = [
     node: "Node 1",
     timestamp: "2023-10-01 12:00 PM",
     severity: "Low",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -146,6 +165,7 @@ export const mockDataAlerts = [
     type: "Illegal Logging",
     node: "Node 2",
     timestamp: "2023-10-02 1:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -153,6 +173,7 @@ export const mockDataAlerts = [
     type: "Poaching",
     node: "Node 3",
     timestamp: "2023-10-03 2:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -161,6 +182,7 @@ export const mockDataAlerts = [
     node: "Node 1",
     timestamp: "2023-10-01 12:00 PM",
     severity: "Low",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -168,6 +190,7 @@ export const mockDataAlerts = [
     type: "Illegal Logging",
     node: "Node 2",
     timestamp: "2023-10-02 1:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -175,6 +198,7 @@ export const mockDataAlerts = [
     type: "Poaching",
     node: "Node 3",
     timestamp: "2023-10-03 2:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -183,6 +207,7 @@ export const mockDataAlerts = [
     node: "Node 1",
     timestamp: "2023-10-01 12:00 PM",
     severity: "Low",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
@@ -190,13 +215,15 @@ export const mockDataAlerts = [
     type: "Illegal Logging",
     node: "Node 2",
     timestamp: "2023-10-02 1:00 PM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
   {
     id: 27,
     type: "Poaching",
     node: "Node 3",
-    timestamp: "2023-10-03 2:00 PM",
+    timestamp: "2025-09-21 2:31 AM",
+    res_ack_timestamp: "2023-10-01 12:00 PM",
     status: "Resolved",
   },
 ];
@@ -412,7 +439,7 @@ export const mockDataReadings = [
   },
   {
     id: 27,
-    timestamp: "2023-10-01 12:00 PM",
+    timestamp: "2024-09-22 1:00 AM",
     node: "Node 2",
     temp: 29,
     humidity: 86,
@@ -420,7 +447,7 @@ export const mockDataReadings = [
   },
   {
     id: 28,
-    timestamp: "2023-10-01 12:00 PM",
+    timestamp: "2025-09-22 2:31 AM",
     node: "Node 3",
     temp: 41,
     humidity: 26,
@@ -443,6 +470,16 @@ export const mockDataNodes = [
     id: 3,
     name: "Node 3",
     status: "Active",
+  },
+  {
+    id: 4,
+    name: "Node 4",
+    status: "Active",
+  },
+  {
+    id: 5,
+    name: "Node 5",
+    status: "Inactive",
   },
 ];
 

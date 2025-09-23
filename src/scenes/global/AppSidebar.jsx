@@ -30,7 +30,7 @@ const Item = ({ title, to, icon, filledIcon, selected, setSelected, colors }) =>
     component={<Link to={to} />}
   >
     <Typography
-      fontSize="15px"
+      fontSize="14px"
       sx={{
         color: selected === title ? colors.brown[300] : "inherit",
         fontWeight: selected === title ? 600 : 400,
@@ -89,7 +89,7 @@ const AppSidebar = () => {
                 alignItems="center"
                 ml="15px"
               >
-                <Typography variant="h6" color={colors.brown[300]} fontWeight="600">
+                <Typography variant="h4" color={colors.brown[300]} fontWeight="600">
                   EcoGuardian
                 </Typography>
                 <IconButton onClick={() => setIsCollapsed(!isCollapsed)}>

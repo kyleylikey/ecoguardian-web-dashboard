@@ -1,6 +1,6 @@
 import {Box, Typography, useTheme} from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import { Toolbar, ToolbarButton } from '@mui/x-data-grid';
+import Chip from '@mui/material/Chip';
 import { tokens } from "../../theme";
 import { mockDataAlerts } from "../../data/mockData";
 import Header from "../../components/Header"; 
@@ -9,6 +9,8 @@ import Header from "../../components/Header";
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 import ParkIcon from '@mui/icons-material/Park';
 import PetsIcon from '@mui/icons-material/Pets';
+import CheckIcon from '@mui/icons-material/Check';
+import ErrorIcon from '@mui/icons-material/Error';
 
 const Alerts = () => {
     const theme = useTheme();
@@ -19,19 +21,8 @@ const Alerts = () => {
         {
             field: "type", 
             headerName: "Type", 
-            flex: 1,
+            minWidth: 200,
             renderCell: ({row: {type}}) => {
-            //     let icon_color;
-            //     if (type === "Wildfire Risk") icon_color = colors.red[500];
-            //     else if (type === "Illegal Logging") icon_color = colors.brown[500];
-            //     else if (type === "Poaching") icon_color = colors.blue[500];
-            //     else icon_color = colors.grey[600];
-                
-            //     let text_color;
-            //     if (type === "Wildfire Risk") text_color = colors.red[200];
-            //     else if (type === "Illegal Logging") text_color = colors.brown[200];
-            //     else if (type === "Poaching") text_color = colors.blue[200];
-            //     else text_color = colors.grey[100];
 
                 return (
                     <Box
@@ -42,13 +33,13 @@ const Alerts = () => {
                         height: "100%", // optional, helps in some DataGrid configs
                         }}
                     >
-                        {type === "Wildfire Risk" && <WhatshotIcon sx={{ fontSize: 20, verticalAlign: "middle" }} />}
-                        {type === "Illegal Logging" && <ParkIcon sx={{ fontSize: 20, verticalAlign: "middle" }} />}
-                        {type === "Poaching" && <PetsIcon sx={{ fontSize: 20, verticalAlign: "middle" }} />}
+                        {type === "Wildfire Risk" && <WhatshotIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />}
+                        {type === "Illegal Logging" && <ParkIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />}
+                        {type === "Poaching" && <PetsIcon sx={{ fontSize: 16, verticalAlign: "middle" }} />}
 
                         <Typography
                             sx={{
-                                fontSize: 16,
+                                fontSize: 13,
                                 lineHeight: 1,
                                 verticalAlign: "middle",
                                 display: "inline-block",
@@ -63,68 +54,63 @@ const Alerts = () => {
         {
             field: "node", 
             headerName: "Detected By", 
-            cellClassName: "alert-type-column--cell", 
+            minWidth: 150,
         },
         {
             field: "timestamp", 
             headerName: "Detected At", 
-            flex: 1
+            minWidth: 200,
         },
         {
             field: "severity", 
             headerName: "Severity Reached", 
-            flex: 1,
-            // renderCell: ({row: {severity}}) => {
-            //     return (
-            //         <Box
-            //             sx={{
-            //                 display: "flex",
-            //                 borderRadius: "4px",
-            //                 p: 1,   
-            //                 gap: "5px",
-            //                 alignItems: "center",
-            //                 justifyContent: "center",
-            //                 alignContent: "center",
-            //                 width: "80%",
-            //                 backgroundColor: 
-            //                 severity === "High" ? colors.red[500] 
-            //                 : severity === "Moderate" ? colors.orange[500] 
-            //                 : severity === "Low" ? colors.yellow[500]
-            //                 : "transparent"
-            //             }}
-            //         >
-            //             {severity ? severity : "N/A"}
-            //         </Box>
-            //     )
-            // },
+            minWidth: 180,
+            renderCell: ({row: {severity}}) => {
+                return (
+                    severity === "High" ? <Chip variant="outlined" size="small" label={severity} 
+                    sx={{
+                        color: colors.red[500],
+                        borderColor: colors.red[500],
+                        backgroundColor: "transparent",
+                    }}
+                    />
+                    : severity === "Moderate" ? <Chip variant="outlined" size="small" label={severity}
+                    sx={{
+                        color: colors.orange[500],
+                        borderColor: colors.orange[500],
+                        backgroundColor: "transparent",
+                    }}
+                    />
+                    : severity === "Low" ? <Chip variant="outlined" size="small" label={severity}
+                    sx={{
+                        color: colors.yellow[500],
+                        borderColor: colors.yellow[500],
+                        backgroundColor: "transparent",
+                    }}
+                    />
+                    : <Chip variant="outlined" color="default" size="small" label="N/A" 
+                    
+                    />
+                );
+            }
+        },
+        {
+            field: "res_ack_timestamp", 
+            headerName: "Resolved By", 
+            minWidth: 200,
         },
         {
             field: "status", 
             headerName: "Status", 
             flex: 1,
-            // renderCell: ({row: {status}}) => {
-            //     return (
-            //         <Box
-            //             sx={{
-            //                 display: "flex",
-            //                 alignItems: "center",
-            //                 gap: "5px",
-            //                 borderRadius: "4px",
-            //                 p: 1,
-            //                 alignContent: "center",
-            //                 justifyContent: "center",
-            //                 width: "80%",
-            //                 backgroundColor: 
-            //                 status === "Active" ? colors.green[500] 
-            //                 : status === "Resolved" ? colors.blue[700] 
-            //                 : status === "N/A" ? "transparent"
-            //                 : "transparent",
-            //             }}
-            //         >
-            //             {status ? status : "N/A"}
-            //         </Box>
-            //     )
-            // },
+            renderCell: ({row: {status}}) => {
+                return (
+                    status === "Active" ? <Chip variant="outlined" color="error" size="small" icon={<ErrorIcon />} label={status} />
+                    : status === "Resolved" ? <Chip variant="outlined" color="success" size="small" icon={<CheckIcon />} label={status} />
+                    : status === "N/A" ? <Chip variant="outlined" color="default" size="small" label={status} />
+                    : <Chip variant="outlined" color="default" size="small" label="N/A" />
+                );
+            }
         },
     ]
 

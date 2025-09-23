@@ -1,8 +1,9 @@
-import {Box, Typography, useTheme} from "@mui/material";
+import {Box, Checkbox, Typography, useTheme} from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { tokens } from "../../theme";
 import { mockDataReadings } from "../../data/mockData";
 import Header from "../../components/Header"; 
+import { WrapText } from "lucide-react";
 
 //icons
 
@@ -16,11 +17,12 @@ const Readings = () => {
         {
             field: "timestamp", 
             headerName: "Timestamp",
-            flex: 1
+            minWidth: 200,
         },
         {
             field: "node", 
             headerName: "Detected By",
+            minWidth: 150,
         },
         {
             field: "temp", 
@@ -40,15 +42,18 @@ const Readings = () => {
     ]
 
     return (
-        <Box margin={"20px"}>
+        <Box 
+            margin={"20px"}
+            >
             <Header 
                 title="Environmental Readings" 
                 subtitle="View all past and incoming environmental readings"
-            ></Header>
+                ></Header>
 
             <Box 
                 margin={"40px 0 0 0"} 
                 height="65vh" 
+                
                 sx={{
                     "& .MuiDataGrid-root": {
                         border: "none",
@@ -66,6 +71,12 @@ const Readings = () => {
                 <DataGrid
                     rows = {mockDataReadings}
                     columns = {columns}
+                    pageSizeOptions={[10, 25, 50]}
+                    initialState={{
+                        pagination: {
+                        paginationModel: { pageSize: 25, page: 0 },
+                        },
+                    }}
                 />
             </Box>
         </Box>

@@ -212,7 +212,7 @@ export const themeSettings = (mode) => {
     return {
         palette: {
             mode: mode,
-            ...(mode === 'dark' 
+            ...(mode === 'dark'
                 ? {
                     green: {
                         main: colors.green[300],
@@ -272,10 +272,10 @@ export const themeSettings = (mode) => {
                 }
 
             ),
-            typography: {
-                
-                fontFamily: ["Parkinsans", "sans-serif"].join(","),
-                fontSize: 12,
+        },
+        typography: {
+            fontFamily: ["Parkinsans", "sans-serif"].join(","),
+            fontSize: 13,
                 h1: {
                     fontFamily: ["Parkinsans", "sans-serif"].join(","),
                     fontSize: 40,
@@ -300,8 +300,7 @@ export const themeSettings = (mode) => {
                     fontFamily: ["Parkinsans", "sans-serif"].join(","),
                     fontSize: 14,
                 }
-            }
-        },
+        }
     };
 };
 
@@ -311,7 +310,7 @@ export const ColorModeContext = createContext({
 });
 
 export const useMode = () => {
-    const [mode, setMode] = useState("dark");  
+    const [mode, setMode] = useState("light");  
     const colorMode = useMemo(
         () => ({
             toggleColorMode: () => 

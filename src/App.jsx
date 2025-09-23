@@ -23,7 +23,7 @@ function App() {
       <div className='app'>
         <AppSidebar />
 
-        <main className='content'>
+        <main className='content' sx={{marginLeft: {sm: `240px`}, maxHeight: '100vh', overflow: 'auto'}}>
           <Topbar />
           <Routes>
             <Route path='/' element={<Dashboard />} />

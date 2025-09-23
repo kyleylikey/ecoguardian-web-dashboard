@@ -37,3 +37,36 @@ body,
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 } 
+
+/* Pulse animation keyframes */
+@keyframes pulse-wildfire {
+0% {
+    transform: scale(1);
+}
+50% {
+    transform: scale(0.92);
+}
+100% {
+    transform: scale(1);
+}
+}
+
+@keyframes pulse-logging-poaching {
+0% {
+    transform: scale(1);
+}
+50% {
+    transform: scale(0.92);
+}
+100% {
+    transform: scale(1);
+}
+}
+
+.wildfire-card {
+  animation: pulse-wildfire 1.5s infinite;
+}
+
+.logging-card, .poaching-card, .default-card {
+  animation: pulse-logging-poaching 2s infinite;
+}
