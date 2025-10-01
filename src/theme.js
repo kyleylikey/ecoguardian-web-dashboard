@@ -41,7 +41,6 @@ export const tokens = (mode) => ({
                 900: "#1c2013"
 },
 
-            // Teal Green (leans bluish, clearly different from severity colors)
             blue: {
                 100: "#cce6e6",
                 200: "#99cccc",
@@ -128,9 +127,6 @@ export const tokens = (mode) => ({
                 900: "#d0d1d5",
             },
 
-            
-
-            // Forest Green (rich, strong green, distinct from yellowish tones)
             green: {
                 100: "#1c2013",
                 200: "#384026",
@@ -143,7 +139,6 @@ export const tokens = (mode) => ({
                 900: "#e8ecdf",
             }, 
 
-            // Teal Green (leans bluish, clearly different from severity colors)
             blue: {
                 100: "#001a1a",
                 200: "#003333",

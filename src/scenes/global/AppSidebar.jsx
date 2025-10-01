@@ -67,7 +67,7 @@ const AppSidebar = () => {
   };
 
   return (
-    <Box sx={{ height: "100vh" }}>
+    <Box height="100%">
       <Sidebar collapsed={isCollapsed} style={{ height: "100vh" }} backgroundColor={colors.black[400]}>
         <Menu iconShape="square" menuItemStyles={menuItemStyles}>
           {/* logo and menu */}
