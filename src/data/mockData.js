@@ -1,7 +1,7 @@
 import { tokens } from "../theme";
 
 export const mockDataAlerts = [
-  // Recent Active Alerts (today, Sep 30, 2025)
+  // Recent Active Alerts (Sep 30, 2025)
   {
     id: 1,
     type: "Wildfire Risk",

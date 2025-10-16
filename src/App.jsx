@@ -25,6 +25,7 @@ function App() {
 
         <main className='content' sx={{marginLeft: {sm: `240px`}, maxHeight: '100vh', overflow: 'auto'}}>
           <Topbar />
+          
           <Routes>
             <Route path='/' element={<Dashboard />} />
             <Route path="/alerts" element={<Alerts />} />
