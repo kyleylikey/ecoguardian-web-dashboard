@@ -20,6 +20,9 @@ app.get('/', (req, res) => {
 const readingsRoutes = require('./routes/readings');
 app.use("/api/readings", readingsRoutes);
 
+//Lora
+const loraRoutes = require('./routes/lora');
+app.use("/api/lora", loraRoutes);
 
 
 

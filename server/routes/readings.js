@@ -50,25 +50,5 @@ router.get("/latest", async (req, res) => {
   });
 });
 
-// Insert new reading
-router.post("/", async (req, res) => {
-  const { nodeID, timestamp, temperature, humidity, co_level, battery_level } = req.body;
-
-  if (!nodeID || !timestamp) {
-    return res.status(400).json({ error: "nodeID and timestamp are required" });
-  }
-
-  const sql = `
-    INSERT INTO Readings (nodeID, timestamp, temperature, humidity, co_level, battery_level)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `;
-
-  db.run(sql, [nodeID, timestamp, temperature, humidity, co_level, battery_level], function(err) {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.status(201).json({ id: this.lastID });
-  });
-});
 
 module.exports = router;
