@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
 
 const app = express();
 
@@ -10,9 +11,29 @@ require('./db/db');
 app.use(cors());
 app.use(express.json());
 
+// store SSE clients
+app.locals.sseClients = [];
+
+app.get('/sse/readings', (req, res) => {
+  // Required SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders && res.flushHeaders();
+
+  // send a comment/heartbeat to establish connection in some proxies
+  res.write(': connected\n\n');
+
+  // add to client list
+  app.locals.sseClients.push(res);
+
+  req.on('close', () => {
+    app.locals.sseClients = app.locals.sseClients.filter((c) => c !== res);
+  });
+});
 
 app.get('/', (req, res) => {
-    res.json({ ok: true, service: 'Ecoguardian API', version: '0.1.0' });
+  res.json({ ok: true, service: 'EcoGuardian API' });
 });
 
 //Routes
@@ -24,9 +45,8 @@ app.use("/api/readings", readingsRoutes);
 const loraRoutes = require('./routes/lora');
 app.use("/api/lora", loraRoutes);
 
-
-
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
-    console.log(`EcoGuardian API up on http://localhost:${port}`);
+const server = http.createServer(app);
+server.listen(port, () => {
+  console.log(`EcoGuardian API up on http://localhost:${port}`);
 });

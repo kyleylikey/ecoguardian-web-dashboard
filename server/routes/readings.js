@@ -8,21 +8,16 @@ router.use(express.json());
 // Get all readings (only necessary fields)
 router.get("/", async (req, res) => {
   const sql = `
-    SELECT 
-      timestamp, 
-      nodeID, 
-      temperature, 
-      humidity, 
-      co_level 
-    FROM Readings 
-    ORDER BY timestamp DESC
+    SELECT sensorReadingID as id, nodeID, timestamp, temperature, humidity, co_level FROM Readings 
+    ORDER BY datetime(timestamp) DESC
+    LIMIT 1000
   `;
 
   db.all(sql, [], (err, rows) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
-      res.json({ count: rows.length, data: rows });
+      res.json({ data: rows });
     }
   });
 });
@@ -30,23 +25,13 @@ router.get("/", async (req, res) => {
 // Get latest reading per node
 router.get("/latest", async (req, res) => {
   const sql = `
-    SELECT r.timestamp, r.nodeID, r.temperature, r.humidity, r.co_level
-    FROM Readings r
-    INNER JOIN (
-      SELECT nodeID, MAX(timestamp) as max_time
-      FROM Readings
-      GROUP BY nodeID
-    ) latest
-    ON r.nodeID = latest.nodeID AND r.timestamp = latest.max_time
-    ORDER BY r.nodeID
+    SELECT sensorReadingID as id, nodeID, timestamp, temperature, humidity, co_level FROM Readings
+    ORDER BY datetime(timestamp) DESC
+    LIMIT 5
   `;
-
   db.all(sql, [], (err, rows) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-    } else {
-      res.json({ count: rows.length, data: rows });
-    }
+    if (err) return res.status(500).json({ error: err.message });
+    return res.json({ data: rows });
   });
 });
 

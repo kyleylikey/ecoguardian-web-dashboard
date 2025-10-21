@@ -17,17 +17,42 @@ router.post("/", (req, res) => {
 
       const sql = `
         INSERT INTO Readings (nodeID, timestamp, temperature, humidity, co_level)
-        VALUES (?, datetime('now'), ?, ?, ?)
+        VALUES (?, datetime('now', 'localtime'), ?, ?, ?)
       `;
 
       db.run(sql, [nodeID, temperature, humidity, co_level], function (err) {
         if (err) return res.status(500).json({ error: err.message });
-        return res.status(201).json({
-          ok: true,
-          type: "reading",
-          id: this.lastID,
-          message: "Reading inserted successfully",
-        });
+
+        const insertedId = this.lastID;
+
+        // read the actual inserted row (ensures unique id and DB timestamp)
+        db.get(
+          `SELECT sensorReadingID as id, nodeID, timestamp, temperature, humidity, co_level
+           FROM Readings WHERE sensorReadingID = ?`,
+          [insertedId],
+          (err, row) => {
+            if (!err && row) {
+              const payloadToBroadcast = row;
+              const sseClients = req.app.locals.sseClients || [];
+              const data = JSON.stringify({ type: "reading", data: payloadToBroadcast });
+              sseClients.forEach((clientRes) => {
+                try {
+                  clientRes.write(`event: reading\n`);
+                  clientRes.write(`data: ${data}\n\n`);
+                } catch (e) {
+                  // ignore individual client errors
+                }
+              });
+            }
+
+            return res.status(201).json({
+              ok: true,
+              type: "reading",
+              id: insertedId,
+              message: "Reading inserted successfully",
+            });
+          }
+        );
       });
     } 
     
