@@ -14,6 +14,7 @@ import {
   QuickFilterControl,
   QuickFilterClear,
   QuickFilterTrigger,
+  useGridApiRef,
 } from "@mui/x-data-grid";
 
 import Tooltip from "@mui/material/Tooltip";
@@ -29,18 +30,20 @@ import InputAdornment from "@mui/material/InputAdornment";
 import CancelIcon from "@mui/icons-material/Cancel";
 import SearchIcon from "@mui/icons-material/Search";
 import { styled } from "@mui/material/styles";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const Readings = () => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
   const [readings, setReadings] = useState([]);
+  const apiRef = useGridApiRef();  // 👈 allows access to filtered/sorted/visible data
 
   // ✅ Fetch readings from backend
   useEffect(() => {
     const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
     let es;
 
-    // initial load (all readings)
     (async () => {
       try {
         const res = await fetch(`${API}/api/readings`);
@@ -51,7 +54,6 @@ const Readings = () => {
       }
     })();
 
-    // SSE updates: prepend new readings, avoid duplicates
     try {
       es = new EventSource(`${API.replace(/\/$/, "")}/sse/readings`);
       es.addEventListener("reading", (e) => {
@@ -59,7 +61,6 @@ const Readings = () => {
           const msg = JSON.parse(e.data);
           if (msg?.data) {
             setReadings((prev) => {
-              // skip if we already have this id
               if (prev.some((r) => r.id === msg.data.id)) return prev;
               return [msg.data, ...prev];
             });
@@ -68,14 +69,14 @@ const Readings = () => {
           console.error("invalid SSE message", err);
         }
       });
-      es.onerror = (err) => {
-        console.error("SSE error", err);
-      };
+      es.onerror = (err) => console.error("SSE error", err);
     } catch (err) {
       console.error("SSE init failed", err);
     }
 
-    return () => { if (es) es.close(); };
+    return () => {
+      if (es) es.close();
+    };
   }, []);
 
   // ✅ Define DataGrid columns
@@ -87,6 +88,74 @@ const Readings = () => {
     { field: "humidity", headerName: "Humidity (%)", flex: 1 },
     { field: "co_level", headerName: "CO Level (ppm)", flex: 1 },
   ];
+  // ✅ PDF Export Function
+  const handlePdfExport = (orientation = "portrait") => {
+    const doc = new jsPDF({ orientation, unit: "pt", format: "a4" });
+
+    // Try the grid API method first, fallback to row models or the local state
+    const getVisibleRowsSafe = () => {
+      try {
+        if (apiRef.current?.getVisibleRowModels) {
+          return Array.from(apiRef.current.getVisibleRowModels().values());
+        }
+        if (apiRef.current?.getRowModels) {
+          return Array.from(apiRef.current.getRowModels().values());
+        }
+      } catch (e) {
+        console.warn("Failed to read rows from apiRef, falling back to state", e);
+      }
+      // fallback to the readings state (unfiltered)
+      return readings;
+    };
+
+    const visibleRows = getVisibleRowsSafe();
+    const visibleColumns = apiRef.current?.getVisibleColumns
+      ? apiRef.current.getVisibleColumns()
+      : (apiRef.current?.getAllColumns ? apiRef.current.getAllColumns() : columns);
+
+    // Header
+    doc.setFontSize(18);
+    doc.text("Environmental Readings Report", 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 60);
+    doc.text(`Total Rows: ${visibleRows.length}`, 40, 75);
+
+    // Build table
+    const tableColumn = visibleColumns.map((col) => col.headerName || col.field);
+    const tableRows = visibleRows.map((row) =>
+      visibleColumns.map((col) => {
+        const val = row[col.field] ?? row[col.field?.toString?.()] ?? "";
+        if (col.field === "timestamp") return val ? new Date(val).toLocaleString() : "";
+        return val !== undefined && val !== null ? String(val) : "";
+      })
+    );
+
+    autoTable(doc, {
+      startY: 90,
+      head: [tableColumn],
+      body: tableRows,
+      styles: { fontSize: 9, cellPadding: 4 },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { left: 40, right: 40 },
+    });
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        doc.internal.pageSize.getWidth() - 80,
+        doc.internal.pageSize.getHeight() - 20
+      );
+    }
+
+    const pdfBlob = doc.output("blob");
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    window.open(pdfUrl, "_blank");
+  };
+  
 
   // ✅ Custom Toolbar Styling
   const StyledQuickFilter = styled(QuickFilter)({
@@ -111,12 +180,11 @@ const Readings = () => {
     opacity: ownerState.expanded ? 1 : 0,
     transition: theme.transitions.create(["width", "opacity"]),
   }));
-
   // ✅ Custom Toolbar Component
-  function CustomToolbar() {
+  function CustomToolbar({ apiRef, onPdfExport }) {
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
     const exportMenuTriggerRef = React.useRef(null);
-
+  
     return (
       <Toolbar>
         <Tooltip title="Columns">
@@ -124,7 +192,7 @@ const Readings = () => {
             <ViewColumnIcon fontSize="small" />
           </ColumnsPanelTrigger>
         </Tooltip>
-
+  
         <Tooltip title="Filters">
           <FilterPanelTrigger
             render={(props, state) => (
@@ -136,8 +204,9 @@ const Readings = () => {
             )}
           />
         </Tooltip>
-
+  
         <Divider orientation="vertical" variant="middle" flexItem sx={{ mx: 0.5 }} />
+  
         <Tooltip title="Export">
           <ToolbarButton
             ref={exportMenuTriggerRef}
@@ -150,7 +219,7 @@ const Readings = () => {
             <FileDownloadIcon fontSize="small" />
           </ToolbarButton>
         </Tooltip>
-
+  
         <Menu
           id="export-menu"
           anchorEl={exportMenuTriggerRef.current}
@@ -158,20 +227,18 @@ const Readings = () => {
           onClose={() => setExportMenuOpen(false)}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
-          slotProps={{
-            list: {
-              "aria-labelledby": "export-menu-trigger",
-            },
-          }}
         >
-          <ExportPrint render={<MenuItem />} onClick={() => setExportMenuOpen(false)}>
-            Print
-          </ExportPrint>
+          <MenuItem onClick={() => { onPdfExport("portrait"); setExportMenuOpen(false); }}>
+            Download as PDF (Portrait)
+          </MenuItem>
+          <MenuItem onClick={() => { onPdfExport("landscape"); setExportMenuOpen(false); }}>
+            Download as PDF (Landscape)
+          </MenuItem>
           <ExportCsv render={<MenuItem />} onClick={() => setExportMenuOpen(false)}>
             Download as CSV
           </ExportCsv>
         </Menu>
-
+  
         <StyledQuickFilter>
           <QuickFilterTrigger
             render={(triggerProps, state) => (
@@ -215,9 +282,7 @@ const Readings = () => {
                         </QuickFilterClear>
                       </InputAdornment>
                     ) : null,
-                    ...controlProps.slotProps?.input,
                   },
-                  ...controlProps.slotProps,
                 }}
               />
             )}
@@ -226,7 +291,6 @@ const Readings = () => {
       </Toolbar>
     );
   }
-
   // ✅ Render
   return (
     <Box m="20px">
@@ -251,14 +315,21 @@ const Readings = () => {
         }}
       >
         <DataGrid
+          apiRef={apiRef}
+          slots={{ toolbar: CustomToolbar }}
+          slotProps={{
+            toolbar: { apiRef, onPdfExport: handlePdfExport } // <-- pass props into the toolbar
+          }}
+          showToolbar
           rows={readings}
           columns={columns}
-          slots={{ toolbar: CustomToolbar }}
           pageSizeOptions={[10, 25, 50]}
           initialState={{
             pagination: { paginationModel: { pageSize: 10, page: 0 } },
           }}
         />
+
+
       </Box>
     </Box>
   );

@@ -15,16 +15,18 @@ app.use(express.json());
 app.locals.sseClients = [];
 
 app.get('/sse/readings', (req, res) => {
-  // Required SSE headers
+  // allow the frontend origin (use specific origin in production)
+  res.setHeader('Access-Control-Allow-Origin', process.env.CLIENT_ORIGIN || '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders && res.flushHeaders();
 
-  // send a comment/heartbeat to establish connection in some proxies
+  // send a comment/heartbeat
   res.write(': connected\n\n');
 
-  // add to client list
+  // add to clients list
   app.locals.sseClients.push(res);
 
   req.on('close', () => {
