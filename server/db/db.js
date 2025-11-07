@@ -32,6 +32,19 @@ db.serialize(() => {
       )
     `);
 
+     // Table for GPS readings (linked to the Readings entry)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS GPSData (
+        gpsID INTEGER PRIMARY KEY AUTOINCREMENT,
+        readingID INTEGER NOT NULL,
+        latitude REAL,
+        longitude REAL,
+        altitude REAL,
+        fix BOOLEAN,
+        FOREIGN KEY(readingID) REFERENCES Readings(sensorReadingID)
+      )
+    `);
+
      // Create RiskDetection table
    db.run(`
     CREATE TABLE IF NOT EXISTS RiskDetection (

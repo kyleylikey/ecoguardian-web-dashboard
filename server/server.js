@@ -49,6 +49,9 @@ app.use("/api/lora", loraRoutes);
 
 const port = process.env.PORT || 3000;
 const server = http.createServer(app);
-server.listen(port, () => {
-  console.log(`EcoGuardian API up on http://localhost:${port}`);
+server.listen(port, "0.0.0.0", () => {
+  console.log(`✅ EcoGuardian API up and running on:`);
+  console.log(`   • Local:   http://localhost:${port}`);
+  console.log(`   • Network: http://${require('os').networkInterfaces().Ethernet?.find(i => i.family === 'IPv4')?.address || 'your-device-ip'}:${port}`);
 });
+
