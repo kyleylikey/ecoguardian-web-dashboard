@@ -1,12 +1,16 @@
 const express = require("express");
 const router = express.Router();
 
-router.get("/", (req, res) => {
-  res.json({ message: "Test route working!" });
-});
+router.post("/", (req, res) => {
+  console.log("📡 Received POST from ChirpStack:");
+  console.log(JSON.stringify(req.body, null, 2));
 
-router.get("/ping", (req, res) => {
-  res.json({ message: "pong 🏓" });
+  // Respond back with confirmation
+  res.json({
+    ok: true,
+    message: "Data received successfully",
+    received: req.body
+  });
 });
 
 module.exports = router;

@@ -24,6 +24,9 @@ app.use("/api/readings", readingsRoutes);
 const loraRoutes = require('./routes/lora');
 app.use("/api/lora", loraRoutes);
 
+// Your test route
+app.use("/api/test", require("./routes/test"));
+// Start server
 
 
 const port = process.env.PORT || 3000;
