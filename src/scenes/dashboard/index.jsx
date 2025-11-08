@@ -8,7 +8,7 @@ import LastData from "../../components/LastData";
 import LastAlert from "../../components/LastAlert";
 import NodesStatus from "../../components/NodesStatus";
 import ActiveAlerts from "../../components/ActiveAlerts";
-import RecentReadings from "../../components/RecentReadings";
+import LatestReadings from "../../components/LatestReadings";
 
 //mock data
 import {mockDataReadings} from "../../data/mockData";
@@ -17,13 +17,6 @@ import {mockDataAlerts} from "../../data/mockData";
 const Dashboard = () => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
-
-  // sort readings by timestamp (descending)
-  const sortedReadings = [...mockDataReadings].sort(
-    (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
-  );
-
-  const recentReadings = sortedReadings.slice(0, 6);
 
   return (
     <Box m="20px">
@@ -93,7 +86,7 @@ const Dashboard = () => {
             <LastData readings={mockDataReadings} color={colors.black[400]} />
           </Box>
         
-          {/* recent environmental readings */}
+          {/* latest environmental readings */}
           <Box className="r2_c2" backgroundColor={colors.black[400]}>
             <Box
               sx={{
@@ -104,7 +97,7 @@ const Dashboard = () => {
               }}
             >
               <Typography variant="h5" fontWeight={600} color={colors.green[500]}>
-                Recent Environmental Readings
+                Latest Environmental Readings
               </Typography>
 
               <Button
@@ -127,7 +120,7 @@ const Dashboard = () => {
               </Button>
             </Box>
             
-            <RecentReadings />
+            <LatestReadings />
           </Box>
 
           {/* days since last threat alert */}
