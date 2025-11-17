@@ -43,6 +43,11 @@ const Alerts = () => {
     return String(c);
   };
 
+  // resolve timestamp picker: prefer resolved_at, fallback to resolvedAt, else if resolved true use detection timestamp
+  const pickResolvedTimestamp = (r) => {
+    return r.resolved_at ?? r.resolvedAt ?? (r.resolved ? r.timestamp : null);
+  };
+
   const columns = [
     { field: "id", headerName: "ID" },
     {
@@ -96,11 +101,11 @@ const Alerts = () => {
       renderCell: ({ row: { confidence } }) => <span>{formatConfidence(confidence)}</span>,
     },
     {
-      field: "res_ack_timestamp",
-      headerName: "Resolved By",
+      field: "resolved",
+      headerName: "Resolved At",
       flex: 1,
       renderCell: (params) => (
-        <span>{params.row.res_ack_timestamp ? new Date(params.row.res_ack_timestamp).toLocaleString() : ""}</span>
+        <span>{params.row.resolved ? new Date(params.row.resolved).toLocaleString() : ""}</span>
       ),
     },
     {
@@ -133,7 +138,7 @@ const Alerts = () => {
       node: nodeLabel,
       timestamp: r.timestamp,
       severity,
-      res_ack_timestamp: r.resolved_at ?? r.res_ack_timestamp ?? null,
+      resolved: pickResolvedTimestamp(r) ?? null,
       confidence: r.confidence ?? null,
       status,
       // keep raw row for potential detail modal
@@ -193,7 +198,7 @@ const Alerts = () => {
           const payload = JSON.parse(e.data)?.data;
           const resolvedId = payload?.riskID ?? payload?.id;
           if (!resolvedId) return;
-          setRows((prev) => prev.map((r) => (String(r.id) === String(resolvedId) ? { ...r, status: "Resolved", res_ack_timestamp: payload?.resolved_at ?? new Date().toISOString() } : r)));
+          setRows((prev) => prev.map((r) => (String(r.id) === String(resolvedId) ? { ...r, status: "Resolved", resolved: payload?.resolved ?? new Date().toISOString() } : r)));
         } catch (err) {}
       });
 
@@ -229,7 +234,7 @@ const Alerts = () => {
     const tableRows = dataRows.map((row) =>
       visibleColumns.map((col) => {
         const val = row[col.field];
-        if (col.field === "timestamp" || col.field === "res_ack_timestamp") {
+        if (col.field === "timestamp" || col.field === "resolved") {
           return val ? new Date(val).toLocaleString() : "";
         }
         return val !== undefined && val !== null ? String(val) : "";

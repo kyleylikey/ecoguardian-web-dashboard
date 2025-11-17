@@ -31,10 +31,11 @@ const ActiveAlerts = () => {
   const [selectedAlertReadings, setSelectedAlertReadings] = React.useState([]);
   const [elapsed, setElapsed] = React.useState("00");
   const [activeAlerts, setActiveAlerts] = React.useState([]);
+  const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
+  const [resolving, setResolving] = React.useState(false);
 
   const handleOpen = async (alert) => {
     setSelectedAlert(alert);
-    const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
     const riskUrl = `${base}/api/riskdetection/${alert.id}`;
     const riskReadingsUrl = `${base}/api/riskdetection/${alert.id}/readings`;
 
@@ -109,6 +110,29 @@ const ActiveAlerts = () => {
     setSelectedAlertReadings([]);
   };
 
+  const handleResolve = async () => {
+    if (!selectedAlert) return;
+    const id = selectedAlert.id ?? selectedAlert._raw?.riskID ?? selectedAlert._raw?.id;
+    if (!id) return;
+    setResolving(true);
+    try {
+      const res = await fetch(`${base}/api/riskdetection/${id}/resolve`, { method: "POST" });
+      if (!res.ok) {
+        console.warn("Failed to resolve risk:", await res.text());
+        setResolving(false);
+        return;
+      }
+      // optimistic UI update: remove from active list and mark selected as resolved
+      setActiveAlerts(prev => prev.filter(a => String(a.id) !== String(id)));
+      setSelectedAlert(prev => prev ? { ...prev, status: "Resolved", resolved_at: new Date().toISOString() } : prev);
+      setOpen(false);
+    } catch (err) {
+      console.error("Error resolving risk:", err);
+    } finally {
+      setResolving(false);
+    }
+  };
+
   // Track elapsed time since alert.timestamp
   React.useEffect(() => {
     if (!selectedAlert) return;
@@ -177,7 +201,6 @@ const ActiveAlerts = () => {
 
   // initial load + SSE for live updates
   React.useEffect(() => {
-    const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
     const listUrl = `${base}/api/riskdetection`;
     const sseUrl = `${base}/sse/risks`;
 
@@ -511,12 +534,12 @@ const ActiveAlerts = () => {
                 </Button>
 
                 {selectedAlert?.type === "Wildfire Risk" ? (
-                  <Button variant="contained" color="error">
-                    Resolve
+                  <Button variant="contained" color="error" onClick={handleResolve} disabled={resolving}>
+                    {resolving ? "Resolving…" : "Resolve"}
                   </Button>
                 ) : (
-                  <Button variant="contained" color="primary">
-                    Acknowledge
+                  <Button variant="contained" color="primary" onClick={handleResolve} disabled={resolving}>
+                    {resolving ? "Resolving…" : "Resolve"}
                   </Button>
                 )}
               </Box>
