@@ -16,8 +16,6 @@ import {
   TableCell,
 } from "@mui/material";
 import { tokens } from "../theme";
-import { mockDataAlerts } from "../data/mockData";
-import { mockDataReadings } from "../data/mockData";
 
 //icons
 import WhatshotIcon from '@mui/icons-material/Whatshot';
@@ -30,16 +28,85 @@ const ActiveAlerts = () => {
 
   const [open, setOpen] = React.useState(false);
   const [selectedAlert, setSelectedAlert] = React.useState(null);
+  const [selectedAlertReadings, setSelectedAlertReadings] = React.useState([]);
   const [elapsed, setElapsed] = React.useState("00");
+  const [activeAlerts, setActiveAlerts] = React.useState([]);
 
-  const handleOpen = (alert) => {
+  const handleOpen = async (alert) => {
     setSelectedAlert(alert);
+    const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
+    const riskUrl = `${base}/api/riskdetection/${alert.id}`;
+    const riskReadingsUrl = `${base}/api/riskdetection/${alert.id}/readings`;
+
+    try {
+      // fetch risk info (to get canonical nodeID + timestamp)
+      const rRes = await fetch(riskUrl);
+      const rJson = rRes.ok ? await rRes.json() : null;
+      const riskInfo = rJson?.data ?? null;
+      const nodeID = riskInfo?.nodeID ?? alert?._raw?.nodeID ?? alert?.nodeID ?? null;
+      const riskTs = riskInfo?.timestamp ?? alert?.timestamp ?? null;
+
+      // fetch risk timeline snapshots
+      const tRes = await fetch(riskReadingsUrl);
+      const timeline = (tRes.ok ? (await tRes.json())?.data : []) || [];
+
+      // fetch subsequent readings from /api/readings using nodeID + since
+      let subsequent = [];
+      if (nodeID) {
+        const qs = new URLSearchParams({ nodeID: String(nodeID) });
+        if (riskTs) qs.set("since", String(riskTs));
+        const sRes = await fetch(`${base}/api/readings?${qs.toString()}`);
+        subsequent = sRes.ok ? (await sRes.json())?.data ?? [] : [];
+      }
+
+      // merge (don't aggressively dedupe) and sort newest-first
+      const merged = [...timeline, ...subsequent].slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      // normalize and dedupe by sensorReadingID (keep first occurrence), preserve entries without id
+      const seenIds = new Set();
+      const normalized = [];
+      merged.forEach((r, idx) => {
+        const sid = r.sensorReadingID ?? r.id ?? null;
+        // skip duplicates that have a numeric id (timeline + subsequent may include same reading twice)
+        if (sid != null) {
+          const n = Number(sid);
+          if (seenIds.has(n)) return;
+          seenIds.add(n);
+        }
+        const uniq = sid != null ? `id:${sid}` : `ts:${r.timestamp ?? ''}:${idx}`;
+        normalized.push({
+          id: sid ?? uniq,
+          sensorReadingID: sid ?? null,
+          nodeID: r.nodeID ?? r.node ?? null,
+          timestamp: r.timestamp,
+          temperature: r.temperature ?? null,
+          humidity: r.humidity ?? null,
+          co_level: r.co_level ?? null,
+          latitude: r.latitude ?? r.gps?.latitude ?? null,
+          longitude: r.longitude ?? r.gps?.longitude ?? null,
+          altitude: r.altitude ?? r.gps?.altitude ?? null,
+          fix: !!(r.fix ?? r.gps?.fix),
+          _uniqKey: uniq,
+        });
+      });
+
+      // debug: inspect normalized list
+      console.table(normalized.map(x => ({ id: x.id, timestamp: x.timestamp, temp: x.temperature })));
+
+      setSelectedAlertReadings(normalized);
+      setOpen(true);
+    } catch (err) {
+      console.warn("Failed to load readings for alert modal", err);
+      setSelectedAlertReadings([]);
+    }
+
     setOpen(true);
   };
 
   const handleClose = () => {
     setOpen(false);
     setSelectedAlert(null);
+    setSelectedAlertReadings([]);
   };
 
   // Track elapsed time since alert.timestamp
@@ -77,64 +144,139 @@ const ActiveAlerts = () => {
     return () => clearInterval(timer);
   }, [selectedAlert]);
 
-  // Filter active alerts
-  const activeAlerts = mockDataAlerts.filter((alert) => alert.status === "Active");
-
-  // Modal box styles
-  const baseModalStyle = {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    bgcolor: "background.paper",
-    borderRadius: 2,
-    boxShadow: 24,
-    p: 4,
-    display: "flex",
-    flexDirection: "column",
+  // helper to format confidence values (0-1 -> percent)
+  const formatConfidence = (c) => {
+    if (c === null || c === undefined) return "N/A";
+    if (typeof c === "number") return c <= 1 ? `${(c * 100).toFixed(1)}%` : String(c);
+    const parsed = parseFloat(String(c));
+    if (!isNaN(parsed)) return parsed <= 1 ? `${(parsed * 100).toFixed(1)}%` : String(parsed);
+    return String(c);
   };
 
-  // For Poaching / Illegal Logging
-  const standardModalStyle = {
-    ...baseModalStyle,
-    width: 550,
-    height: 300,
+  // map backend risk -> UI alert object
+  const mapRisk = (r) => {
+    const typeMap = { fire: "Wildfire Risk", chainsaw: "Illegal Logging", gunshots: "Poaching" };
+    const severityMap = { high: "High", medium: "Moderate", low: "Low" };
+    const id = r.riskID ?? r.id ?? r.id;
+    const nodeLabel = r.nodeName ?? (r.nodeID ? `Node ${r.nodeID}` : "Unknown");
+    const type = typeMap[r.risk_type] || (r.risk_type ? String(r.risk_type) : "Unknown");
+    const severity = severityMap[String(r.risk_level || "").toLowerCase()] || (r.risk_level ? String(r.risk_level) : "N/A");
+    const status = r.resolved ? "Resolved" : "Active";
+    return {
+      id,
+      type,
+      node: nodeLabel,
+      timestamp: r.timestamp,
+      severity,
+      resolved_at: r.resolved_at ?? r.res_ack_timestamp ?? null,
+      status,
+      confidence: r.confidence ?? null, // <-- include confidence
+      _raw: r,
+    };
   };
 
-  // For Wildfire Risk (larger)
-  const wildfireModalStyle = {
-    ...baseModalStyle,
-    width: 650,   // adjust as needed
-    height: 450,  // taller to fit the readings
-  };
+  // initial load + SSE for live updates
+  React.useEffect(() => {
+    const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
+    const listUrl = `${base}/api/riskdetection`;
+    const sseUrl = `${base}/sse/risks`;
 
-  // Decide colors/icons dynamically
-  const getAlertVisuals = (type) => {
-    if (type === "Wildfire Risk")
-      return { color: colors.red[400], icon: <WhatshotIcon sx={{fontSize: 20}} /> };
-    if (type === "Illegal Logging")
-      return { color: colors.brown[400], icon: <ParkIcon sx={{fontSize: 20}} /> };
-    if (type === "Poaching")
-      return { color: colors.blue[400], icon: <PetsIcon sx={{fontSize: 20}} /> };
-    return { color: colors.grey[400], icon: "⚠️" };
-  };
+    let es;
 
-  // Decide wildfire severity based on readings
-  const getSeverity = (temperature, humidity, co) => {
-    // Default is safe
-    let severity = "Safe";
+    const fetchActive = async () => {
+      try {
+        const res = await fetch(listUrl);
+        if (!res.ok) return;
+        const json = await res.json();
+        const active = (json?.data || []).filter(r => !r.resolved).map(mapRisk);
+        setActiveAlerts(active);
+      } catch (err) {
+        console.error("Error fetching risks:", err);
+      }
+    };
 
-    if (temperature > 35 && humidity < 40 && co > 15) {
-      severity = "High";
-    } else if (temperature > 30 && humidity < 60 && co > 10) {
-      severity = "Moderate";
-    } else if (temperature > 28 && humidity < 70 && co > 5) {
-      severity = "Low";
+    fetchActive();
+
+    try {
+      es = new EventSource(sseUrl);
+
+      es.addEventListener("risk_created", (e) => {
+        try {
+          const payload = JSON.parse(e.data)?.data;
+          if (!payload) return;
+          const mapped = mapRisk(payload);
+          setActiveAlerts(prev => [mapped, ...prev]);
+        } catch (err) {}
+      });
+
+      es.addEventListener("risk_updated", (e) => {
+        try {
+          const payload = JSON.parse(e.data)?.data;
+          if (!payload) return;
+          const mapped = mapRisk(payload);
+          setActiveAlerts(prev => {
+            const found = prev.some(a => String(a.id) === String(mapped.id));
+            if (found) return prev.map(a => String(a.id) === String(mapped.id) ? { ...a, ...mapped } : a);
+            return [mapped, ...prev];
+          });
+
+          // if modal open for this id, update selectedAlert + fetch latest readings
+          if (selectedAlert && String(selectedAlert.id) === String(mapped.id)) {
+            setSelectedAlert(s => s ? { ...s, ...mapped } : s);
+            // fetch new readings live
+            const readingsUrl = `${base}/api/riskdetection/${mapped.id}/readings`;
+            fetch(readingsUrl)
+              .then(r => r.ok ? r.json() : null)
+              .then(json => {
+                if (json?.data) {
+                  setSelectedAlertReadings(prevReadings => {
+                    const merged = [...prevReadings, ...json.data];
+                    const seenIds = new Set();
+                    return merged
+                      .slice()
+                      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                      .filter(r => {
+                        const sid = r.sensorReadingID ?? r.id ?? null;
+                        if (sid != null) {
+                          if (seenIds.has(sid)) return false;
+                          seenIds.add(sid);
+                        }
+                        return true;
+                      });
+                  });
+                }
+              })
+              .catch(err => console.warn("Failed to fetch live readings:", err));
+          }
+        } catch (err) {
+          console.warn("Invalid SSE risk_updated payload", err);
+        }
+      });
+
+      es.addEventListener("risk_resolved", (e) => {
+        try {
+          const payload = JSON.parse(e.data)?.data;
+          const resolvedId = payload?.riskID ?? payload?.id;
+          if (!resolvedId) return;
+          setActiveAlerts(prev => prev.filter(a => String(a.id) !== String(resolvedId)));
+          if (selectedAlert && String(selectedAlert.id) === String(resolvedId)) {
+            setSelectedAlert(s => s ? { ...s, status: "Resolved", resolved_at: payload?.resolved_at ?? new Date().toISOString() } : s);
+          }
+        } catch (err) {}
+      });
+
+      es.onerror = (err) => console.warn("SSE error", err);
+    } catch (err) {
+      console.warn("Failed to open SSE:", err);
     }
 
-    return severity;
-  };
+    return () => {
+      if (es) es.close();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAlert]);
 
+  // For UI rendering below, use activeAlerts (live-updated)
   return (
     <Box
       sx={{
@@ -155,17 +297,6 @@ const ActiveAlerts = () => {
       ) : (
         activeAlerts.map((alert) => (
           <Card
-            //for css styling
-            className={
-              alert.type === "Wildfire Risk"
-                ? "wildfire-card"
-                : alert.type === "Illegal Logging"
-                ? "logging-card"
-                : alert.type === "Poaching"
-                ? "poaching-card"
-                : ""
-            }
-
             key={alert.id}
             onClick={() => handleOpen(alert)}
             sx={{
@@ -174,7 +305,7 @@ const ActiveAlerts = () => {
                 alert.type === "Wildfire Risk"
                   ? colors.red[900]
                   : alert.type === "Illegal Logging"
-                  ? colors.brown[900]
+                  ? colors.brown?.[900] ?? colors.grey[800]
                   : alert.type === "Poaching"
                   ? colors.blue[900]
                   : colors.grey[800],
@@ -192,7 +323,7 @@ const ActiveAlerts = () => {
                   alert.type === "Wildfire Risk"
                     ? colors.red[400]
                     : alert.type === "Illegal Logging"
-                    ? colors.brown[400]
+                    ? colors.brown?.[400] ?? colors.grey[400]
                     : alert.type === "Poaching"
                     ? colors.blue[400]
                     : colors.grey[400]
@@ -205,7 +336,7 @@ const ActiveAlerts = () => {
                   Detected By: {alert.node}
                 </Typography>
                 <Typography variant="caption" color={colors.grey[400]}>
-                  At: {new Date(alert.timestamp).toLocaleString()}
+                  At: {alert.timestamp ? new Date(alert.timestamp).toLocaleString() : ""}
                 </Typography>
               </Box>
             </CardContent>
@@ -215,13 +346,22 @@ const ActiveAlerts = () => {
 
       {/* Alert Modal */}
       <Modal open={open} onClose={handleClose} >
-      <Box
-        sx={
-          selectedAlert?.type === "Wildfire Risk"
-            ? wildfireModalStyle
-            : standardModalStyle
-        }
-      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            bgcolor: "background.paper",
+            borderRadius: 2,
+            boxShadow: 24,
+            p: 4,
+            display: "flex",
+            flexDirection: "column",
+            width: selectedAlert?.type === "Wildfire Risk" ? 800 : 550,
+            height: selectedAlert?.type === "Wildfire Risk" ? 500 : 300,
+          }}
+        >
           {selectedAlert && (
             <>
               {/* Modal Header */}
@@ -238,9 +378,20 @@ const ActiveAlerts = () => {
                   variant="h4"
                   fontWeight={600}
                   component="h2"
-                  color={getAlertVisuals(selectedAlert.type).color}
+                  color={
+                    selectedAlert.type === "Wildfire Risk"
+                      ? colors.red[400]
+                      : selectedAlert.type === "Illegal Logging"
+                      ? colors.brown?.[400] ?? colors.grey[400]
+                      : selectedAlert.type === "Poaching"
+                      ? colors.blue[400]
+                      : colors.grey[400]
+                  }
                 >
-                  {getAlertVisuals(selectedAlert.type).icon} {selectedAlert.type}
+                  {selectedAlert.type === "Wildfire Risk" ? <WhatshotIcon sx={{fontSize: 20}} /> :
+                    selectedAlert.type === "Illegal Logging" ? <ParkIcon sx={{fontSize: 20}} /> :
+                    selectedAlert.type === "Poaching" ? <PetsIcon sx={{fontSize: 20}} /> : null}
+                  {" "}{selectedAlert.type}
                 </Typography>
 
                 <Chip
@@ -253,14 +404,13 @@ const ActiveAlerts = () => {
                       selectedAlert?.type === "Wildfire Risk"
                         ? colors.red[400]
                         : selectedAlert?.type === "Illegal Logging"
-                        ? colors.brown[400]
+                        ? colors.brown?.[400] ?? colors.grey[400]
                         : selectedAlert?.type === "Poaching"
                         ? colors.blue[400]
                         : colors.grey[400],
-                    color: colors.grey[900], // ensure readable text
+                    color: colors.grey[900],
                   }}
                 />
-
               </Box>
               {/* Modal Body */}
               <Box
@@ -274,8 +424,15 @@ const ActiveAlerts = () => {
                 </Typography>
                 <Typography mb={1.2}>
                   <strong>Detected At:</strong>{" "}
-                  {new Date(selectedAlert.timestamp).toLocaleString()}
+                  {selectedAlert.timestamp ? new Date(selectedAlert.timestamp).toLocaleString() : ""}
                 </Typography>
+
+                {/* Show confidence for audio-based alerts */}
+                {selectedAlert?.confidence != null && (
+                  <Typography mb={1.2}>
+                    <strong>Confidence:</strong> {formatConfidence(selectedAlert.confidence)}
+                  </Typography>
+                )}
 
                 {/* Wildfire Risk extra readings */}
                 {selectedAlert?.type === "Wildfire Risk" && (
@@ -295,27 +452,27 @@ const ActiveAlerts = () => {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {mockDataReadings
+                        {selectedAlertReadings
                           .filter(
-                            (r) => new Date(r.timestamp) >= new Date(selectedAlert.timestamp)
+                            (r) => !selectedAlert.timestamp || new Date(r.timestamp) >= new Date(selectedAlert.timestamp)
                           )
                           .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)) // newest first
                           .map((reading, idx) => {
+                            // adapt to possible field names returned by DB
+                            const temp = reading.temperature ?? reading.temp ?? reading.reading_temperature;
+                            const humidity = reading.humidity ?? reading.humidity;
+                            const co = reading.co_level ?? reading.co_lvl ?? reading.co_level;
                             const severity =
-                              reading.temp > 35 || reading.co_lvl > 20
-                                ? "High"
-                                : reading.temp > 30 || reading.co_lvl > 10
-                                ? "Moderate"
-                                : "Low";
+                              (temp > 35 || co > 20) ? "High" : (temp > 30 || co > 10) ? "Moderate" : "Low";
 
                             return (
-                              <TableRow key={idx}>
+                              <TableRow key={reading._uniqKey ?? reading.id ?? idx}>
                                 <TableCell>
-                                  {new Date(reading.timestamp).toLocaleTimeString()}
+                                  {reading.timestamp ? new Date(reading.timestamp).toLocaleTimeString() : ""}
                                 </TableCell>
-                                <TableCell>{reading.temp}</TableCell>
-                                <TableCell>{reading.humidity}</TableCell>
-                                <TableCell>{reading.co_lvl}</TableCell>
+                                <TableCell>{temp ?? "—"}</TableCell>
+                                <TableCell>{humidity ?? "—"}</TableCell>
+                                <TableCell>{co ?? "—"}</TableCell>
                                 <TableCell
                                   sx={{
                                     fontWeight: "bold",
@@ -324,9 +481,7 @@ const ActiveAlerts = () => {
                                         ? "red"
                                         : severity === "Moderate"
                                         ? "orange"
-                                        : severity === "Low"
-                                        ? "green"
-                                        : "grey",
+                                        : "green",
                                   }}
                                 >
                                   {severity} Risk

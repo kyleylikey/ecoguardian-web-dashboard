@@ -30,7 +30,7 @@ const Dashboard = () => {
           {/* nodes status */}
           <Box className="r1_c1" backgroundColor={colors.black[400]}>
             <Typography variant="h5" fontWeight={600} mb={2} color={colors.green[500]}>
-              Nodes Status
+              Sensor Nodes Status
             </Typography>
             {/* thin not working */}
             <Box height="80%">

@@ -127,33 +127,6 @@ const AppSidebar = () => {
               setSelected={setSelected}
               colors={colors}
             />
-            <Item
-              title="Bar Chart"
-              to="/bar"
-              icon={<LeaderboardOutlinedIcon sx={{ fontSize: 22 }} />}
-              filledIcon={<LeaderboardIcon sx={{ fontSize: 22 }} />}
-              selected={selected}
-              setSelected={setSelected}
-              colors={colors}
-            />
-            <Item
-              title="Line Chart"
-              to="/line"
-              icon={<TimelineOutlinedIcon sx={{ fontSize: 22 }} />}
-              filledIcon={<TimelineIcon sx={{ fontSize: 22 }} />}
-              selected={selected}
-              setSelected={setSelected}
-              colors={colors}
-            />
-            <Item
-              title="Calendar"
-              to="/calendar"
-              icon={<CalendarMonthOutlinedIcon sx={{ fontSize: 22 }} />}
-              filledIcon={<CalendarMonthIcon sx={{ fontSize: 22 }} />}
-              selected={selected}
-              setSelected={setSelected}
-              colors={colors}
-            />
           </Box>
         </Menu>
       </Sidebar>

@@ -87,6 +87,51 @@ const Readings = () => {
     { field: "temperature", headerName: "Temperature (°C)", flex: 1 },
     { field: "humidity", headerName: "Humidity (%)", flex: 1 },
     { field: "co_level", headerName: "CO Level (ppm)", flex: 1 },
+
+    // GPS columns (safe access)
+    {
+      field: "latitude",
+      headerName: "Latitude",
+      flex: 1,
+      valueGetter: (params) => {
+        const row = params?.row ?? {};
+        return row.latitude ?? row.gps?.latitude ?? null;
+      },
+    },
+    {
+      field: "longitude",
+      headerName: "Longitude",
+      flex: 1,
+      valueGetter: (params) => {
+        const row = params?.row ?? {};
+        return row.longitude ?? row.gps?.longitude ?? null;
+      },
+    },
+    {
+      field: "altitude",
+      headerName: "Altitude",
+      flex: 1,
+      valueGetter: (params) => {
+        const row = params?.row ?? {};
+        return row.altitude ?? row.gps?.altitude ?? null;
+      },
+    },
+    {
+      field: "fix",
+      headerName: "Fix",
+      width: 100,
+      renderCell: (params) => {
+        const row = params?.row ?? {};
+        const v = row.fix ?? row.gps?.fix ?? false;
+        return v ? "Yes" : "No";
+      },
+      sortComparator: (v1, v2, cellParams1, cellParams2) => {
+        // ensure we compare booleans even if the grid passes nulls
+        const a = (cellParams1?.row?.fix ?? cellParams1?.row?.gps?.fix) ? 1 : 0;
+        const b = (cellParams2?.row?.fix ?? cellParams2?.row?.gps?.fix) ? 1 : 0;
+        return a - b;
+      },
+    },
   ];
   // ✅ PDF Export Function
   const handlePdfExport = (orientation = "portrait") => {

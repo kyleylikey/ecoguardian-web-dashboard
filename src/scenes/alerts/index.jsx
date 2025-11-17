@@ -1,8 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Box, Typography, useTheme } from "@mui/material";
 import Chip from "@mui/material/Chip";
 import { tokens } from "../../theme";
-import { mockDataAlerts } from "../../data/mockData";
 import Header from "../../components/Header";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -34,6 +33,16 @@ const Alerts = () => {
   const colors = tokens(theme.palette.mode);
   const apiRef = useGridApiRef();
 
+  const [rows, setRows] = useState([]);
+
+  // format confidence (0..1 -> percent, otherwise show raw)
+  const formatConfidence = (c) => {
+    if (c === null || c === undefined) return "N/A";
+    const n = Number(c);
+    if (!isNaN(n)) return n <= 1 ? `${(n * 100).toFixed(1)}%` : String(n);
+    return String(c);
+  };
+
   const columns = [
     { field: "id", headerName: "ID" },
     {
@@ -54,7 +63,7 @@ const Alerts = () => {
       field: "timestamp",
       headerName: "Detected At",
       flex: 1,
-      renderCell: (params) => <span>{new Date(params.row.timestamp).toLocaleString()}</span>,
+      renderCell: (params) => <span>{params.row.timestamp ? new Date(params.row.timestamp).toLocaleString() : ""}</span>,
     },
     {
       field: "severity",
@@ -81,13 +90,17 @@ const Alerts = () => {
       },
     },
     {
+      field: "confidence",
+      headerName: "Confidence",
+      flex: 1,
+      renderCell: ({ row: { confidence } }) => <span>{formatConfidence(confidence)}</span>,
+    },
+    {
       field: "res_ack_timestamp",
       headerName: "Resolved By",
       flex: 1,
       renderCell: (params) => (
-        <span>
-          {params.row.res_ack_timestamp ? new Date(params.row.res_ack_timestamp).toLocaleString() : ""}
-        </span>
+        <span>{params.row.res_ack_timestamp ? new Date(params.row.res_ack_timestamp).toLocaleString() : ""}</span>
       ),
     },
     {
@@ -105,28 +118,115 @@ const Alerts = () => {
     },
   ];
 
-  // ✅ PDF Export respecting filters, sorts, and column visibility
+  // map backend risk row -> UI row
+  const mapRisk = (r) => {
+    const typeMap = { fire: "Wildfire Risk", chainsaw: "Illegal Logging", gunshots: "Poaching" };
+    const severityMap = { high: "High", medium: "Moderate", low: "Low" };
+    const id = r.id ?? r.riskID ?? r.riskId;
+    const nodeLabel = r.nodeName ?? (r.nodeID ? `Node ${r.nodeID}` : r.nodeID ?? "Unknown");
+    const type = typeMap[r.risk_type] || (r.risk_type ? String(r.risk_type) : "Unknown");
+    const severity = severityMap[String(r.risk_level || "").toLowerCase()] || (r.risk_level ? String(r.risk_level) : null);
+    const status = r.resolved ? "Resolved" : "Active";
+    return {
+      id,
+      type,
+      node: nodeLabel,
+      timestamp: r.timestamp,
+      severity,
+      res_ack_timestamp: r.resolved_at ?? r.res_ack_timestamp ?? null,
+      confidence: r.confidence ?? null,
+      status,
+      // keep raw row for potential detail modal
+      _raw: r,
+    };
+  };
+
+  useEffect(() => {
+    const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
+    const listUrl = `${base}/api/riskdetection`;
+    const sseUrl = `${base}/sse/risks`;
+
+    let es;
+
+    const fetchAll = async () => {
+      try {
+        const res = await fetch(listUrl);
+        if (!res.ok) {
+          console.error("Failed to fetch risks:", res.status, await res.text());
+          return;
+        }
+        const json = await res.json();
+        const data = (json?.data || []).map(mapRisk);
+        setRows(data);
+      } catch (err) {
+        console.error("Error fetching risks:", err);
+      }
+    };
+
+    fetchAll();
+
+    // SSE - live updates
+    try {
+      es = new EventSource(sseUrl);
+      es.addEventListener("risk_created", (e) => {
+        try {
+          const payload = JSON.parse(e.data)?.data;
+          if (!payload) return;
+          const mapped = mapRisk(payload);
+          setRows((prev) => [mapped, ...prev]);
+        } catch (err) {}
+      });
+
+      es.addEventListener("risk_updated", (e) => {
+        try {
+          const payload = JSON.parse(e.data)?.data;
+          if (!payload) return;
+          const mapped = mapRisk(payload);
+          setRows((prev) => prev.map(r => String(r.id) === String(mapped.id) ? { ...r, ...mapped } : r));
+        } catch (err) {
+          console.warn("Invalid SSE risk_updated payload", err);
+        }
+      });
+
+      es.addEventListener("risk_resolved", (e) => {
+        try {
+          const payload = JSON.parse(e.data)?.data;
+          const resolvedId = payload?.riskID ?? payload?.id;
+          if (!resolvedId) return;
+          setRows((prev) => prev.map((r) => (String(r.id) === String(resolvedId) ? { ...r, status: "Resolved", res_ack_timestamp: payload?.resolved_at ?? new Date().toISOString() } : r)));
+        } catch (err) {}
+      });
+
+      es.onerror = (err) => {
+        console.warn("SSE error", err);
+        // EventSource will try to reconnect by default
+      };
+    } catch (err) {
+      console.warn("Failed to open SSE:", err);
+    }
+
+    return () => {
+      if (es) es.close();
+    };
+  }, []);
+
+  // ✅ PDF Export (unchanged) - use `rows` instead of mockDataAlerts
   const handlePdfExport = (orientation = "portrait") => {
     if (!apiRef.current) return;
     const doc = new jsPDF({ orientation, unit: "pt", format: "a4" });
 
-    // Get visible columns (respects column visibility)
     const visibleColumns = apiRef.current.getVisibleColumns();
-
-    // Get sorted + filtered row IDs (respects filter panel + sorting)
     const sortedFilteredRowIds = apiRef.current.getSortedRowIds();
-    const rows = sortedFilteredRowIds.map((id) => apiRef.current.getRow(id));
+    const dataRows = sortedFilteredRowIds.map((id) => apiRef.current.getRow(id));
 
-    // HEADER
     doc.setFontSize(18);
     doc.text("Alert Activity Report", 40, 40);
     doc.setFontSize(10);
     doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 60);
-    doc.text(`Total Rows: ${rows.length}`, 40, 75);
+    doc.text(`Total Rows: ${dataRows.length}`, 40, 75);
 
-    // TABLE
     const tableColumn = visibleColumns.map((col) => col.headerName || col.field);
-    const tableRows = rows.map((row) =>
+    const tableRows = dataRows.map((row) =>
       visibleColumns.map((col) => {
         const val = row[col.field];
         if (col.field === "timestamp" || col.field === "res_ack_timestamp") {
@@ -146,24 +246,17 @@ const Alerts = () => {
       margin: { left: 40, right: 40 },
     });
 
-    // FOOTER
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      doc.text(
-        `Page ${i} of ${pageCount}`,
-        doc.internal.pageSize.getWidth() - 80,
-        doc.internal.pageSize.getHeight() - 20
-      );
+      doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.getWidth() - 80, doc.internal.pageSize.getHeight() - 20);
     }
 
-    // ✅ Open PDF in a new tab
     const pdfBlob = doc.output("blob");
     const pdfUrl = URL.createObjectURL(pdfBlob);
     window.open(pdfUrl, "_blank");
   };
 
-  // ✅ Toolbar (no search)
   function CustomToolbar() {
     const [exportMenuOpen, setExportMenuOpen] = React.useState(false);
     const exportMenuTriggerRef = React.useRef(null);
@@ -191,20 +284,12 @@ const Alerts = () => {
         <Divider orientation="vertical" variant="middle" flexItem sx={{ mx: 0.5 }} />
 
         <Tooltip title="Export">
-          <ToolbarButton
-            ref={exportMenuTriggerRef}
-            onClick={() => setExportMenuOpen(true)}
-          >
+          <ToolbarButton ref={exportMenuTriggerRef} onClick={() => setExportMenuOpen(true)}>
             <FileDownloadIcon fontSize="small" />
           </ToolbarButton>
         </Tooltip>
 
-        <Menu
-          anchorEl={exportMenuTriggerRef.current}
-          open={exportMenuOpen}
-          onClose={() => setExportMenuOpen(false)}
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        >
+        <Menu anchorEl={exportMenuTriggerRef.current} open={exportMenuOpen} onClose={() => setExportMenuOpen(false)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }}>
           <MenuItem
             onClick={() => {
               setExportMenuOpen(false);
@@ -249,17 +334,7 @@ const Alerts = () => {
           },
         }}
       >
-        <DataGrid
-          apiRef={apiRef}
-          rows={mockDataAlerts}
-          columns={columns}
-          slots={{ toolbar: CustomToolbar }}
-          showToolbar
-          pageSizeOptions={[10, 25, 50]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 10, page: 0 } },
-          }}
-        />
+        <DataGrid apiRef={apiRef} rows={rows} columns={columns} slots={{ toolbar: CustomToolbar }} showToolbar pageSizeOptions={[10, 25, 50]} initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }} />
       </Box>
     </Box>
   );

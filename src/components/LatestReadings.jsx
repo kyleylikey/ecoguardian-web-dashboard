@@ -18,8 +18,9 @@ const LatestReadings = () => {
     const [latest, setLatest] = useState([]);
 
     useEffect(() => {
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
         const sseUrl = `${API_BASE_URL.replace(/\/$/, "")}/sse/readings`;
+        const fetchUrl = `${API_BASE_URL.replace(/\/$/, "")}/api/readings`;
 
         const normalize = (r) => ({
             id: r.id ?? r.sensorReadingID ?? null,
@@ -28,6 +29,10 @@ const LatestReadings = () => {
             temp: r.temperature ?? r.temp,
             humidity: r.humidity,
             co_lvl: r.co_level ?? r.co_lvl,
+            latitude: r.latitude ?? r.gps?.latitude ?? null,
+            longitude: r.longitude ?? r.gps?.longitude ?? null,
+            altitude: r.altitude ?? r.gps?.altitude ?? null,
+            fix: r.fix ?? Boolean(r.gps?.fix) ?? false,
         });
 
         const fetchAll = async () => {
@@ -90,6 +95,10 @@ const LatestReadings = () => {
                         <TableCell sx={{ color: colors.grey[100], backgroundColor: colors.black[400] }}>Temperature (°C)</TableCell>
                         <TableCell sx={{ color: colors.grey[100], backgroundColor: colors.black[400] }}>Humidity (%)</TableCell>
                         <TableCell sx={{ color: colors.grey[100], backgroundColor: colors.black[400] }}>CO Level (ppm)</TableCell>
+                        <TableCell sx={{ color: colors.grey[100], backgroundColor: colors.black[400] }}>Latitude</TableCell>
+                        <TableCell sx={{ color: colors.grey[100], backgroundColor: colors.black[400] }}>Longitude</TableCell>
+                        <TableCell sx={{ color: colors.grey[100], backgroundColor: colors.black[400] }}>Altitude</TableCell>
+                        <TableCell sx={{ color: colors.grey[100], backgroundColor: colors.black[400] }}>Fix</TableCell>
                     </TableRow>
                 </TableHead>
 
@@ -104,6 +113,10 @@ const LatestReadings = () => {
                             <TableCell sx={{ color: colors.grey[100] }}>{reading.temp}</TableCell>
                             <TableCell sx={{ color: colors.grey[100] }}>{reading.humidity}</TableCell>
                             <TableCell sx={{ color: colors.grey[100] }}>{reading.co_lvl}</TableCell>
+                            <TableCell sx={{ color: colors.grey[100] }}>{reading.latitude ?? "—"}</TableCell>
+                            <TableCell sx={{ color: colors.grey[100] }}>{reading.longitude ?? "—"}</TableCell>
+                            <TableCell sx={{ color: colors.grey[100] }}>{reading.altitude ?? "—"}</TableCell>
+                            <TableCell sx={{ color: colors.grey[100] }}>{reading.fix ? "Yes" : "No"}</TableCell>
                         </TableRow>
                     ))}
                 </TableBody>
