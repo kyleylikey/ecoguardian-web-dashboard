@@ -210,7 +210,7 @@ router.post("/", (req, res) => {
 
               if (existing) {
                 // Subsequent alert -> update the existing risk row: latest readingID + timestamp + optionally update confidence/risk_level
-                db.run(`UPDATE RiskDetection SET readingID = ?, confidence = ?, risk_level = ?, timestamp = datetime('now','localtime') WHERE riskID = ?`, [newReadingID, confidence, risk_level, existing.riskID], function (uErr) {
+                db.run(`INSERT INTO RiskDetection (readingID, confidence, risk_level, timestamp) VALUES (?, ?, ?, datetime('now','localtime')) WHERE riskID = ?`, [newReadingID, confidence, risk_level, existing.riskID], function (uErr) {
                   if (uErr) {
                     console.error("DB update RiskDetection error:", uErr);
                     // still return success for reading created
