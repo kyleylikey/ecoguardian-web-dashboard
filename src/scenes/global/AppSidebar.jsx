@@ -6,21 +6,16 @@ import { tokens } from "../../theme";
 
 //icons outlined
 import MenuOutlinedIcon from "@mui/icons-material/MenuOutlined";
-
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
 import ViewListOutlinedIcon from '@mui/icons-material/ViewListOutlined';
-import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
-import TimelineOutlinedIcon from '@mui/icons-material/TimelineOutlined';
-import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
+import SensorsOutlinedIcon from '@mui/icons-material/SensorsOutlined'; // ✅ Add this
 
 //icons filled
 import Dashboard from '@mui/icons-material/Dashboard';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import ViewListIcon from '@mui/icons-material/ViewList';
-import LeaderboardIcon from '@mui/icons-material/Leaderboard';
-import TimelineIcon from '@mui/icons-material/Timeline';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import SensorsIcon from '@mui/icons-material/Sensors'; // ✅ Add this
 
 const Item = ({ title, to, icon, filledIcon, selected, setSelected, colors }) => (
   <MenuItem
@@ -32,7 +27,7 @@ const Item = ({ title, to, icon, filledIcon, selected, setSelected, colors }) =>
     <Typography
       fontSize="14px"
       sx={{
-        color: selected === title ? colors.brown[300] : "inherit",
+        color: selected === title ? "#664147" : "inherit",
         fontWeight: selected === title ? 600 : 400,
       }}
     >
@@ -89,7 +84,7 @@ const AppSidebar = () => {
                 alignItems="center"
                 ml="15px"
               >
-                <Typography variant="h4" color={colors.brown[300]} fontWeight="600">
+                <Typography variant="h4" color="#664147" fontWeight="600">
                   EcoGuardian
                 </Typography>
                 <IconButton onClick={() => setIsCollapsed(!isCollapsed)}>
@@ -123,6 +118,16 @@ const AppSidebar = () => {
               to="/readings"
               icon={<ViewListOutlinedIcon sx={{ fontSize: 22 }} />}
               filledIcon={<ViewListIcon sx={{ fontSize: 22 }} />}
+              selected={selected}
+              setSelected={setSelected}
+              colors={colors}
+            />
+            {/* ✅ Add Sensor Nodes Link */}
+            <Item
+              title="Sensor Nodes"
+              to="/nodes"
+              icon={<SensorsOutlinedIcon sx={{ fontSize: 22 }} />}
+              filledIcon={<SensorsIcon sx={{ fontSize: 22 }} />}
               selected={selected}
               setSelected={setSelected}
               colors={colors}

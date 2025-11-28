@@ -7,7 +7,7 @@ import AppSidebar from './scenes/global/AppSidebar';
 import Dashboard from './scenes/dashboard';
 import Alerts from './scenes/alerts';
 import Readings from './scenes/readings';
-
+import SensorNodes from './scenes/nodes'; // ✅ Add this
 
 function App() {
   const [theme, colorMode] = useMode();
@@ -27,6 +27,7 @@ function App() {
             <Route path='/' element={<Dashboard />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path='/readings' element={<Readings />} />
+            <Route path='/nodes' element={<SensorNodes />} /> {/* ✅ Add this */}
           </Routes>
         </main>
       </div>

@@ -269,30 +269,30 @@ export const themeSettings = (mode) => {
             ),
         },
         typography: {
-            fontFamily: ["Parkinsans", "sans-serif"].join(","),
+            fontFamily: ["TikTok Sans", "sans-serif"].join(","),
             fontSize: 13,
                 h1: {
-                    fontFamily: ["Parkinsans", "sans-serif"].join(","),
+                    fontFamily: ["TikTok Sans", "sans-serif"].join(","),
                     fontSize: 40,
                 },
                 h2: {
-                    fontFamily: ["Parkinsans", "sans-serif"].join(","),
+                    fontFamily: ["TikTok Sans", "sans-serif"].join(","),
                     fontSize: 32,
                 },
                 h3: {
-                    fontFamily: ["Parkinsans", "sans-serif"].join(","),
+                    fontFamily: ["TikTok Sans", "sans-serif"].join(","),
                     fontSize: 24,
                 },
                 h4: {
-                    fontFamily: ["Parkinsans", "sans-serif"].join(","),
+                    fontFamily: ["TikTok Sans", "sans-serif"].join(","),
                     fontSize: 20,
                 },
                 h5: {
-                    fontFamily: ["Parkinsans", "sans-serif"].join(","),
+                    fontFamily: ["TikTok Sans", "sans-serif"].join(","),
                     fontSize: 16,
                 },
                 h6: {
-                    fontFamily: ["Parkinsans", "sans-serif"].join(","),
+                    fontFamily: ["TikTok Sans", "sans-serif"].join(","),
                     fontSize: 14,
                 }
         }

@@ -3,142 +3,101 @@ const cors = require('cors');
 const http = require('http');
 const path = require('path');
 const os = require('os');
+const { WebSocketServer } = require('ws');
 
 const app = express();
 
-// prefer explicit client origin for CORS; set CLIENT_ORIGIN env var in dev if needed
+// Prefer explicit client origin for CORS
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 
 // Initialize DB
 require('./db/db');
 
+// ----------------------
 // Middleware
-// reflect request origin so browser sees an exact match; allow credentials
+// ----------------------
 app.use(cors({ origin: true, credentials: true }));
-
-// respond to preflight requests
 app.options('/*', cors({ origin: true, credentials: true }));
-
 app.use(express.json());
 
-// simple logger to debug CORS/SSE requests
-app.use((req, res, next) => {
-  console.log(new Date().toISOString(), req.method, req.url, 'Origin:', req.headers.origin);
-  next();
-});
-
 // ----------------------
-// SSE setup for live readings
+// WebSocket Server Setup
 // ----------------------
-app.locals.sseClients = [];
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+const wsClients = new Set();
 
-app.get('/sse/readings', (req, res) => {
-  // mirror the incoming Origin header exactly (required when credentials: true)
-  const origin = req.headers.origin || CLIENT_ORIGIN;
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders?.();
+wss.on('connection', (ws) => {
+  console.log('🔌 New WebSocket client connected');
+  wsClients.add(ws);
 
-  res.write(': connected\n\n');
+  // Send welcome message
+  ws.send(JSON.stringify({ 
+    type: 'connection', 
+    message: 'Connected to EcoGuardian WebSocket server',
+    timestamp: new Date().toISOString()
+  }));
 
-  app.locals.sseClients.push(res);
-  req.on('close', () => {
-    app.locals.sseClients = app.locals.sseClients.filter((c) => c !== res);
+  ws.on('message', (message) => {
+    console.log('📨 Received from client:', message.toString());
+    // Optional: Handle client messages here
   });
-});
 
-// ----------------------
-// SSE setup for live sensornodes
-// ----------------------
-app.locals.sseSensorNodeClients = [];
-
-app.get('/sse/sensornodes', (req, res) => {
-  const origin = req.headers.origin || CLIENT_ORIGIN;
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders?.();
-
-  // send a comment to keep connection alive on some proxies
-  res.write(': connected\n\n');
-
-  app.locals.sseSensorNodeClients.push(res);
-  req.on('close', () => {
-    app.locals.sseSensorNodeClients = app.locals.sseSensorNodeClients.filter(r => r !== res);
+  ws.on('close', () => {
+    console.log('🔌 Client disconnected');
+    wsClients.delete(ws);
+    console.log(`   Active connections: ${wsClients.size}`);
   });
-});
 
-// ----------------------
-// SSE setup for live risk detections
-// ----------------------
-app.locals.sseRiskClients = [];
-
-app.get('/sse/risks', (req, res) => {
-  const origin = req.headers.origin || CLIENT_ORIGIN;
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders?.();
-
-  // keep-alive comment
-  res.write(': connected\n\n');
-
-  app.locals.sseRiskClients.push(res);
-  req.on('close', () => {
-    app.locals.sseRiskClients = app.locals.sseRiskClients.filter(r => r !== res);
+  ws.on('error', (error) => {
+    console.error('❌ WebSocket error:', error);
+    wsClients.delete(ws);
   });
+
+  console.log(`   Active connections: ${wsClients.size}`);
 });
 
+// Make wsClients available to routes
+app.set('wsClients', wsClients);
+
 // ----------------------
-// Mount API routes (must come BEFORE static/catch-all)
+// API Routes
 // ----------------------
+const sensorNodesRoutes = require("./routes/sensornodes");
 const readingsRoutes = require('./routes/readings');
-app.use('/api/readings', readingsRoutes);
-
+const risksRoutes = require('./routes/risks');
 const loraRoutes = require('./routes/lora');
-app.use('/api/lora', loraRoutes);
 
-const sensorNodeRoutes = require('./routes/sensornodes');
-app.use('/api/sensornodes', sensorNodeRoutes);
-
-const riskRoutes = require('./routes/riskdetection');
-app.use('/api/riskdetection', riskRoutes);
+// Register routes
+app.use("/api/sensornodes", sensorNodesRoutes);
+app.use("/api/readings", readingsRoutes);
+app.use("/api/risks", risksRoutes);
+app.use("/api/lora", loraRoutes);
 
 // ----------------------
-// 3️⃣ Serve frontend build (React app built with Vite)
+// Serve Frontend (React/Vite Build)
 // ----------------------
 app.use(express.static(path.join(__dirname, '../dist')));
 
-// Catch-all to serve React for any non-API routes
-app.use((req, res) => {
+// Catch-all for React Router
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 // ----------------------
-// 4️⃣ Start server
+// Start Server
 // ----------------------
-const port = process.env.PORT || 3000;
-const server = http.createServer(app);
+const PORT = process.env.PORT || 3000;
 
-server.listen(port, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', () => {
   const nets = os.networkInterfaces();
   const allAddrs = Object.values(nets).flat().filter(Boolean);
-  const ip =
-    allAddrs.find((i) => i.family === 'IPv4' && !i.internal)?.address ||
-    '192.168.1.4';
+  const localIP = allAddrs.find((i) => i.family === 'IPv4' && !i.internal)?.address || 'localhost';
 
-
-  console.log(`✅ EcoGuardian API up and running on:`);
-  console.log(`   • Local:   http://localhost:${port}`);
-  console.log(`   • Network: http://${ip}:${port}`);
+  console.log('\n✅ EcoGuardian Server Started');
+  console.log('─────────────────────────────────');
+  console.log(`📍 Local:   http://localhost:${PORT}`);
+  console.log(`📍 Network: http://${localIP}:${PORT}`);
+  console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
+  console.log('─────────────────────────────────\n');
 });

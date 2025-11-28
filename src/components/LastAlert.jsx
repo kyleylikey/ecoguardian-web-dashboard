@@ -1,67 +1,48 @@
 import React, { useEffect, useState } from "react";
 import { Typography } from "@mui/material";
+import { useWebSocket } from "../hooks/useWebSocket";
 
 const LastAlert = () => {
+  const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+  const WS_URL = API.replace(/^http/, "ws");
+
+  const { lastMessage } = useWebSocket(WS_URL);
   const [lastAlertTimestamp, setLastAlertTimestamp] = useState(null);
 
+  // Initial fetch
   useEffect(() => {
-    const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
-    const listUrl = `${base}/api/riskdetection`;
-    const sseUrl = `${base}/sse/risks`;
-
-    let es;
-
-    const load = async () => {
+    (async () => {
       try {
-        const res = await fetch(listUrl);
+        const res = await fetch(`${API}/api/risks?limit=1`);
         if (!res.ok) {
           console.warn("Failed to fetch risks:", res.status);
           return;
         }
+
         const json = await res.json();
-        const rows = json?.data ?? [];
-        if (rows.length === 0) {
-          setLastAlertTimestamp(null);
-          return;
+        const rows = json?.risks || [];
+
+        if (rows.length > 0 && rows[0].timestamp) {
+          setLastAlertTimestamp(rows[0].timestamp);
         }
-        // find newest timestamp
-        const newest = rows.reduce((acc, r) => {
-          const t = r.timestamp ? new Date(r.timestamp) : null;
-          return t && (!acc || t > acc) ? t : acc;
-        }, null);
-        setLastAlertTimestamp(newest ? newest.toISOString() : null);
       } catch (err) {
-        console.warn("Error loading riskdetection:", err);
+        console.warn("Error loading risks:", err);
       }
-    };
+    })();
+  }, [API]);
 
-    load();
+  // WebSocket updates
+  useEffect(() => {
+    if (!lastMessage) return;
 
-    try {
-      es = new EventSource(sseUrl);
-      es.addEventListener("risk_created", (e) => {
-        try {
-          const payload = JSON.parse(e.data)?.data;
-          const ts = payload?.timestamp ? new Date(payload.timestamp) : new Date();
-          setLastAlertTimestamp((prev) => {
-            if (!prev) return ts.toISOString();
-            return new Date(ts) > new Date(prev) ? ts.toISOString() : prev;
-          });
-        } catch (err) {
-          console.warn("Invalid SSE risk_created payload", err);
-        }
+    if (lastMessage.event === "risk_detected") {
+      const ts = lastMessage.timestamp;
+      setLastAlertTimestamp((prev) => {
+        if (!prev) return ts;
+        return new Date(ts) > new Date(prev) ? ts : prev;
       });
-      es.onerror = () => {
-        // silent - EventSource will retry
-      };
-    } catch (err) {
-      console.warn("Failed to open SSE for risks:", err);
     }
-
-    return () => {
-      if (es) es.close();
-    };
-  }, []);
+  }, [lastMessage]);
 
   if (!lastAlertTimestamp) {
     return <Typography>No alerts found.</Typography>;
@@ -76,9 +57,7 @@ const LastAlert = () => {
     <Typography>
       {diffDays === 0
         ? "0 (Last alert occurred today.)"
-        : `${diffDays}  day${
-            diffDays > 1 ? "s" : ""
-          } ago.)`}
+        : `${diffDays} day${diffDays > 1 ? "s" : ""} ago.`}
     </Typography>
   );
 };

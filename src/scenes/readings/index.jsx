@@ -9,7 +9,6 @@ import {
   ColumnsPanelTrigger,
   FilterPanelTrigger,
   ExportCsv,
-  ExportPrint,
   QuickFilter,
   QuickFilterControl,
   QuickFilterClear,
@@ -32,131 +31,178 @@ import SearchIcon from "@mui/icons-material/Search";
 import { styled } from "@mui/material/styles";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { useWebSocket } from "../../hooks/useWebSocket";
 
 const Readings = () => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
-  const [readings, setReadings] = useState([]);
-  const apiRef = useGridApiRef();  // 👈 allows access to filtered/sorted/visible data
+  const apiRef = useGridApiRef();
 
-  // ✅ Fetch readings from backend
+  const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+  const WS_URL = API.replace(/^http/, "ws");
+
+  // WebSocket connection for real-time updates
+  const { lastMessage, connectionStatus } = useWebSocket(WS_URL);
+
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // ✅ Fetch initial readings from backend
   useEffect(() => {
-    const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-    let es;
-
     (async () => {
       try {
-        const res = await fetch(`${API}/api/readings`);
+        setLoading(true);
+        const res = await fetch(`${API}/api/readings`); // ✅ Fixed: was /api/risks
+
+        if (!res.ok) {
+          console.error("❌ Failed to fetch readings:", res.status, await res.text());
+          return;
+        }
+
         const json = await res.json();
-        setReadings(json?.data || []);
+        const data = json?.readings || [];
+        setRows(data);
+        console.log(`✅ Loaded ${data.length} readings`);
       } catch (err) {
-        console.error("fetch readings failed", err);
+        console.error("❌ Error fetching readings:", err);
+      } finally {
+        setLoading(false);
       }
     })();
+  }, [API]);
 
-    try {
-      es = new EventSource(`${API.replace(/\/$/, "")}/sse/readings`);
-      es.addEventListener("reading", (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg?.data) {
-            setReadings((prev) => {
-              if (prev.some((r) => r.id === msg.data.id)) return prev;
-              return [msg.data, ...prev];
-            });
-          }
-        } catch (err) {
-          console.error("invalid SSE message", err);
+  // ✅ Handle real-time WebSocket updates
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    if (lastMessage.event === "new_reading") {
+      const newReading = {
+        readingID: lastMessage.data?.readingID,
+        nodeID: lastMessage.data?.nodeID,
+        timestamp: lastMessage.timestamp,
+        temperature: lastMessage.data?.temperature,
+        humidity: lastMessage.data?.humidity,
+        co_level: lastMessage.data?.co_level,
+        latitude: lastMessage.data?.location?.latitude,
+        longitude: lastMessage.data?.location?.longitude,
+        altitude: lastMessage.data?.location?.altitude,
+        fix: lastMessage.data?.location?.fix,
+      };
+
+      setRows((prev) => {
+        // Avoid duplicates
+        if (prev.some((r) => r.readingID === newReading.readingID)) {
+          return prev;
         }
+        // Add new reading to the top
+        console.log("📊 New reading received:", newReading);
+        return [newReading, ...prev];
       });
-      es.onerror = (err) => console.error("SSE error", err);
-    } catch (err) {
-      console.error("SSE init failed", err);
     }
-
-    return () => {
-      if (es) es.close();
-    };
-  }, []);
+  }, [lastMessage]);
 
   // ✅ Define DataGrid columns
   const columns = [
-    { field: "id", headerName: "ID", width: 90 },
-    { field: "timestamp", headerName: "Timestamp", minWidth: 200 },
-    { field: "nodeID", headerName: "Detected By", minWidth: 150 },
-    { field: "temperature", headerName: "Temperature (°C)", flex: 1 },
-    { field: "humidity", headerName: "Humidity (%)", flex: 1 },
-    { field: "co_level", headerName: "CO Level (ppm)", flex: 1 },
-
-    // GPS columns (safe access)
+    { field: "readingID", headerName: "ID", width: 90 },
     {
-      field: "latitude",
-      headerName: "Latitude",
-      flex: 1,
-      valueGetter: (params) => {
-        const row = params?.row ?? {};
-        return row.latitude ?? row.gps?.latitude ?? null;
+      field: "timestamp",
+      headerName: "Timestamp",
+      minWidth: 200,
+      valueGetter: (value) => {
+        return value ? new Date(value).toLocaleString() : "";
       },
     },
-    {
-      field: "longitude",
-      headerName: "Longitude",
+    { field: "nodeID", headerName: "Node ID", minWidth: 100 },
+    { 
+      field: "temperature", 
+      headerName: "Temperature (°C)", 
       flex: 1,
-      valueGetter: (params) => {
-        const row = params?.row ?? {};
-        return row.longitude ?? row.gps?.longitude ?? null;
-      },
+      renderCell: (params) => (
+        <span>{params.value !== null && params.value !== undefined ? params.value.toFixed(1) : "—"}</span>
+      ),
     },
-    {
-      field: "altitude",
-      headerName: "Altitude",
+    { 
+      field: "humidity", 
+      headerName: "Humidity (%)", 
       flex: 1,
-      valueGetter: (params) => {
-        const row = params?.row ?? {};
-        return row.altitude ?? row.gps?.altitude ?? null;
-      },
+      renderCell: (params) => (
+        <span>{params.value !== null && params.value !== undefined ? params.value.toFixed(1) : "—"}</span>
+      ),
+    },
+    { 
+      field: "co_level", 
+      headerName: "CO Level (ppm)", 
+      flex: 1,
+      renderCell: (params) => (
+        <span>{params.value !== null && params.value !== undefined ? params.value : "—"}</span>
+      ),
+    },
+    { 
+      field: "latitude", 
+      headerName: "Latitude", 
+      flex: 1,
+      renderCell: (params) => (
+        <span>{params.value !== null && params.value !== undefined ? params.value.toFixed(6) : "—"}</span>
+      ),
+    },
+    { 
+      field: "longitude", 
+      headerName: "Longitude", 
+      flex: 1,
+      renderCell: (params) => (
+        <span>{params.value !== null && params.value !== undefined ? params.value.toFixed(6) : "—"}</span>
+      ),
+    },
+    { 
+      field: "altitude", 
+      headerName: "Altitude (m)", 
+      flex: 1,
+      renderCell: (params) => (
+        <span>{params.value !== null && params.value !== undefined ? params.value.toFixed(1) : "—"}</span>
+      ),
     },
     {
       field: "fix",
-      headerName: "Fix",
+      headerName: "GPS Fix",
       width: 100,
       renderCell: (params) => {
-        const row = params?.row ?? {};
-        const v = row.fix ?? row.gps?.fix ?? false;
-        return v ? "Yes" : "No";
-      },
-      sortComparator: (v1, v2, cellParams1, cellParams2) => {
-        // ensure we compare booleans even if the grid passes nulls
-        const a = (cellParams1?.row?.fix ?? cellParams1?.row?.gps?.fix) ? 1 : 0;
-        const b = (cellParams2?.row?.fix ?? cellParams2?.row?.gps?.fix) ? 1 : 0;
-        return a - b;
+        const hasFix = params.value === true || params.value === 1;
+        return (
+          <Typography
+            sx={{
+              display: "inline-block",
+            }}
+          >
+            {hasFix ? "Yes" : "No"}
+          </Typography>
+        );
       },
     },
   ];
+
   // ✅ PDF Export Function
   const handlePdfExport = (orientation = "portrait") => {
+    if (!apiRef.current) return;
     const doc = new jsPDF({ orientation, unit: "pt", format: "a4" });
 
-    // Try the grid API method first, fallback to row models or the local state
     const getVisibleRowsSafe = () => {
       try {
+        if (apiRef.current?.getSortedRowIds) {
+          return apiRef.current.getSortedRowIds().map((id) => apiRef.current.getRow(id));
+        }
         if (apiRef.current?.getVisibleRowModels) {
           return Array.from(apiRef.current.getVisibleRowModels().values());
-        }
-        if (apiRef.current?.getRowModels) {
-          return Array.from(apiRef.current.getRowModels().values());
         }
       } catch (e) {
         console.warn("Failed to read rows from apiRef, falling back to state", e);
       }
-      // fallback to the readings state (unfiltered)
-      return readings;
+      return rows;
     };
 
     const visibleRows = getVisibleRowsSafe();
     const visibleColumns = apiRef.current?.getVisibleColumns
       ? apiRef.current.getVisibleColumns()
-      : (apiRef.current?.getAllColumns ? apiRef.current.getAllColumns() : columns);
+      : columns;
 
     // Header
     doc.setFontSize(18);
@@ -169,8 +215,9 @@ const Readings = () => {
     const tableColumn = visibleColumns.map((col) => col.headerName || col.field);
     const tableRows = visibleRows.map((row) =>
       visibleColumns.map((col) => {
-        const val = row[col.field] ?? row[col.field?.toString?.()] ?? "";
+        const val = row[col.field];
         if (col.field === "timestamp") return val ? new Date(val).toLocaleString() : "";
+        if (col.field === "fix") return val ? "Yes" : "No";
         return val !== undefined && val !== null ? String(val) : "";
       })
     );
@@ -200,7 +247,6 @@ const Readings = () => {
     const pdfUrl = URL.createObjectURL(pdfBlob);
     window.open(pdfUrl, "_blank");
   };
-  
 
   // ✅ Custom Toolbar Styling
   const StyledQuickFilter = styled(QuickFilter)({
@@ -225,11 +271,12 @@ const Readings = () => {
     opacity: ownerState.expanded ? 1 : 0,
     transition: theme.transitions.create(["width", "opacity"]),
   }));
+
   // ✅ Custom Toolbar Component
   function CustomToolbar({ apiRef, onPdfExport }) {
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
     const exportMenuTriggerRef = React.useRef(null);
-  
+
     return (
       <Toolbar>
         <Tooltip title="Columns">
@@ -237,7 +284,7 @@ const Readings = () => {
             <ViewColumnIcon fontSize="small" />
           </ColumnsPanelTrigger>
         </Tooltip>
-  
+
         <Tooltip title="Filters">
           <FilterPanelTrigger
             render={(props, state) => (
@@ -249,9 +296,9 @@ const Readings = () => {
             )}
           />
         </Tooltip>
-  
+
         <Divider orientation="vertical" variant="middle" flexItem sx={{ mx: 0.5 }} />
-  
+
         <Tooltip title="Export">
           <ToolbarButton
             ref={exportMenuTriggerRef}
@@ -264,7 +311,7 @@ const Readings = () => {
             <FileDownloadIcon fontSize="small" />
           </ToolbarButton>
         </Tooltip>
-  
+
         <Menu
           id="export-menu"
           anchorEl={exportMenuTriggerRef.current}
@@ -273,17 +320,27 @@ const Readings = () => {
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
         >
-          <MenuItem onClick={() => { onPdfExport("portrait"); setExportMenuOpen(false); }}>
+          <MenuItem
+            onClick={() => {
+              onPdfExport("portrait");
+              setExportMenuOpen(false);
+            }}
+          >
             Download as PDF (Portrait)
           </MenuItem>
-          <MenuItem onClick={() => { onPdfExport("landscape"); setExportMenuOpen(false); }}>
+          <MenuItem
+            onClick={() => {
+              onPdfExport("landscape");
+              setExportMenuOpen(false);
+            }}
+          >
             Download as PDF (Landscape)
           </MenuItem>
           <ExportCsv render={<MenuItem />} onClick={() => setExportMenuOpen(false)}>
             Download as CSV
           </ExportCsv>
         </Menu>
-  
+
         <StyledQuickFilter>
           <QuickFilterTrigger
             render={(triggerProps, state) => (
@@ -336,12 +393,13 @@ const Readings = () => {
       </Toolbar>
     );
   }
+
   // ✅ Render
   return (
     <Box m="20px">
       <Header
         title="Environmental Readings"
-        subtitle="View all past and incoming environmental readings"
+        subtitle={`View all past and incoming environmental readings • WebSocket: ${connectionStatus}`}
       />
 
       <Box
@@ -363,18 +421,18 @@ const Readings = () => {
           apiRef={apiRef}
           slots={{ toolbar: CustomToolbar }}
           slotProps={{
-            toolbar: { apiRef, onPdfExport: handlePdfExport } // <-- pass props into the toolbar
+            toolbar: { apiRef, onPdfExport: handlePdfExport },
           }}
           showToolbar
-          rows={readings}
+          rows={rows}
           columns={columns}
-          pageSizeOptions={[10, 25, 50]}
+          loading={loading}
+          getRowId={(row) => row.readingID || row.id}
+          pageSizeOptions={[10, 25, 50, 100]}
           initialState={{
-            pagination: { paginationModel: { pageSize: 10, page: 0 } },
+            pagination: { paginationModel: { pageSize: 25, page: 0 } },
           }}
         />
-
-
       </Box>
     </Box>
   );

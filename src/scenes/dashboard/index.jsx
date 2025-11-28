@@ -29,7 +29,7 @@ const Dashboard = () => {
         
           {/* nodes status */}
           <Box className="r1_c1" backgroundColor={colors.black[400]}>
-            <Typography variant="h5" fontWeight={600} mb={2} color={colors.green[500]}>
+            <Typography variant="h5" fontWeight={600} mb={2} color={colors.black[100]}>
               Sensor Nodes Status
             </Typography>
             {/* thin not working */}
@@ -49,7 +49,7 @@ const Dashboard = () => {
                 marginBottom: 1,
               }}
             >
-              <Typography variant="h5" fontWeight={600} color={colors.green[500]}>
+              <Typography variant="h5" fontWeight={600} color={colors.black[100]}>
                 Active Alerts
               </Typography>
 
@@ -57,15 +57,13 @@ const Dashboard = () => {
                 component={Link} to="/alerts"
                 size="small"
                 sx={{
-                  color: colors.grey[700],
-                  backgroundColor: colors.black[400],
-                  border: `1px solid ${colors.grey[700]}`,  
-                  fontWeight: "600",
+                  color: "#2F9C95",
+                  backgroundColor: colors.grey[900],
+                  fontWeight: "800",
                   textTransform: "none",
                   "&:hover": {
-                    color: colors.grey[500],
-                    backgroundColor: colors.black[400],
-                    border: `1px solid ${colors.grey[500]}`, 
+                    color: "#2F9C95",
+                    backgroundColor: colors.grey[800],
                   },
                 }}
               >
@@ -79,7 +77,7 @@ const Dashboard = () => {
 
           {/* last data reading */}
           <Box className="r2_c1" backgroundColor={colors.black[400]}>
-            <Typography variant="h5" fontWeight={600} mb={2} color={colors.green[500]}>
+            <Typography variant="h5" fontWeight={600} mb={2} color={colors.black[100]}>
               Time Since Last Data Reading
             </Typography>
 
@@ -96,7 +94,7 @@ const Dashboard = () => {
                 marginBottom: 1,
               }}
             >
-              <Typography variant="h5" fontWeight={600} color={colors.green[500]}>
+              <Typography variant="h5" fontWeight={600} color={colors.black[100]}>
                 Latest Environmental Readings
               </Typography>
 
@@ -104,15 +102,13 @@ const Dashboard = () => {
                 component={Link} to="/readings"
                 size="small"
                 sx={{
-                  color: colors.grey[700],
-                  backgroundColor: colors.black[400],
-                  border: `1px solid ${colors.grey[700]}`,  
-                  fontWeight: "600",
+                  color: "#2F9C95",
+                  backgroundColor: colors.grey[900],
+                  fontWeight: "800",
                   textTransform: "none",
                   "&:hover": {
-                    color: colors.grey[500],
-                    backgroundColor: colors.black[400],
-                    border: `1px solid ${colors.grey[500]}`, 
+                    color: "#2F9C95",
+                    backgroundColor: colors.grey[800],
                   },
                 }}
               >
@@ -125,7 +121,7 @@ const Dashboard = () => {
 
           {/* days since last threat alert */}
           <Box className="r3_c1" backgroundColor={colors.black[400]}>
-            <Typography variant="h5" fontWeight={600} mb={2} color={colors.green[500]}>
+            <Typography variant="h5" fontWeight={600} mb={2} color={colors.black[100]}>
               Days Since Last Threat Alert
             </Typography>
             <LastAlert alerts={mockDataAlerts} color={colors.black[400]} />

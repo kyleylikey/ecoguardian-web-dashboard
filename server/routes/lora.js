@@ -2,265 +2,461 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db/db");
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const payload = req.body?.object;
     if (!payload) return res.status(400).json({ error: "Missing object payload" });
 
-    // SSE helpers (must exist before any DB callbacks)
-    function broadcastRiskEvent(app, eventName, riskRow) {
-      try {
-        const clients = app.locals.sseRiskClients || [];
-        const payload = JSON.stringify({ data: riskRow });
-        clients.forEach((clientRes) => {
-          try {
-            clientRes.write(`event: ${eventName}\n`);
-            clientRes.write(`data: ${payload}\n\n`);
-          } catch (e) {}
-        });
-      } catch (e) {
-        console.warn("broadcastRiskEvent error:", e?.message || e);
+    const { type, nodeID, data } = payload;
+    const timestamp = req.body.received_at || new Date().toISOString();
+
+    // ✅ Universal RSSI/SNR extractor
+    let rssi = null;
+    let snr = null;
+
+    // Try different common structures
+    if (req.body.rx_metadata) {
+      // TTN v3 or similar (array format)
+      if (Array.isArray(req.body.rx_metadata) && req.body.rx_metadata.length > 0) {
+        rssi = req.body.rx_metadata[0].rssi;
+        snr = req.body.rx_metadata[0].snr || req.body.rx_metadata[0].lsnr;
+      }
+      // Single object format
+      else if (typeof req.body.rx_metadata === 'object') {
+        rssi = req.body.rx_metadata.rssi;
+        snr = req.body.rx_metadata.snr || req.body.rx_metadata.lsnr;
       }
     }
+    // ChirpStack format
+    else if (req.body.rxInfo && Array.isArray(req.body.rxInfo) && req.body.rxInfo.length > 0) {
+      rssi = req.body.rxInfo[0].rssi;
+      snr = req.body.rxInfo[0].loRaSNR || req.body.rxInfo[0].snr;
+    }
+    // Helium format
+    else if (req.body.hotspots && Array.isArray(req.body.hotspots) && req.body.hotspots.length > 0) {
+      rssi = req.body.hotspots[0].rssi;
+      snr = req.body.hotspots[0].snr;
+    }
+    // Generic metadata
+    else if (req.body.metadata) {
+      rssi = req.body.metadata.rssi;
+      snr = req.body.metadata.snr || req.body.metadata.lsnr;
+    }
+    // Direct fields
+    else {
+      rssi = req.body.rssi;
+      snr = req.body.snr || req.body.lsnr;
+    }
 
-    function broadcastReading(app, readingOrId) {
-      const send = (row) => {
-        try {
-          const clients = app.locals.sseClients || [];
-          const out = {
-            id: row.id ?? row.sensorReadingID ?? null,
-            sensorReadingID: row.id ?? row.sensorReadingID ?? null,
-            nodeID: row.nodeID ?? row.node ?? null,
-            timestamp: row.timestamp ?? new Date().toISOString(),
-            temperature: row.temperature ?? null,
-            humidity: row.humidity ?? null,
-            co_level: row.co_level ?? null,
-            latitude: row.latitude ?? null,
-            longitude: row.longitude ?? null,
-            altitude: row.altitude ?? null,
-            fix: !!row.fix,
-            gps:
-              (row.latitude !== undefined && row.longitude !== undefined) || row.gps
-                ? {
-                    latitude: row.latitude ?? row.gps?.latitude ?? null,
-                    longitude: row.longitude ?? row.gps?.longitude ?? null,
-                    altitude: row.altitude ?? row.gps?.altitude ?? null,
-                    fix: !!(row.fix ?? row.gps?.fix),
-                  }
-                : null,
-          };
-          const payload = JSON.stringify({ type: "reading", data: out });
-          clients.forEach((clientRes) => {
-            try {
-              clientRes.write(`event: reading\n`);
-              clientRes.write(`data: ${payload}\n\n`);
-            } catch (e) {}
+    // If still null, check inside the payload itself
+    if (rssi === null && payload.rssi !== undefined) {
+      rssi = payload.rssi;
+    }
+    if (snr === null && (payload.snr !== undefined || payload.lsnr !== undefined)) {
+      snr = payload.snr || payload.lsnr;
+    }
+
+    console.log('📥 Received LoRa payload:', { type, nodeID, rssi, snr });
+
+    const wsClients = req.app.get('wsClients');
+
+    // ✅ Update node's last_seen and status
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE SensorNodes 
+         SET last_seen = ?, status = 'active'
+         WHERE nodeID = ?`,
+        [timestamp, nodeID],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    // ========================================
+    // HANDLE ALERTS
+    // ========================================
+    if (type === "alert") {
+      let risks = [];
+      
+      if (payload.risks && Array.isArray(payload.risks)) {
+        risks = payload.risks;
+      } else if (payload.risk_type) {
+        risks = [{
+          risk_type: payload.risk_type,
+          risk_level: payload.risk_level,
+          confidence: payload.confidence
+        }];
+      }
+
+      if (risks.length === 0) {
+        return res.status(400).json({ error: "No risks provided in alert" });
+      }
+
+      console.log(`📊 Processing ${risks.length} risk(s)...`);
+
+      // ✅ FIRST: Store the reading data from the alert
+      let readingID = null;
+      if (data?.temp_humid || data?.gas) {
+        readingID = await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO Readings (nodeID, timestamp, temperature, humidity, co_level)
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+              nodeID, 
+              timestamp, 
+              data?.temp_humid?.temperature, 
+              data?.temp_humid?.humidity, 
+              data?.gas?.co_ppm
+            ],
+            function(err) {
+              if (err) reject(err);
+              else {
+                console.log(`✅ Alert reading saved - readingID: ${this.lastID}`);
+                resolve(this.lastID);
+              }
+            }
+          );
+        });
+
+        // Save GPS data for reading
+        if (data?.gps && readingID) {
+          db.run(
+            `INSERT INTO GPSData (readingID, latitude, longitude, altitude, fix)
+             VALUES (?, ?, ?, ?, ?)`,
+            [readingID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
+            (err) => {
+              if (err) console.error("❌ Error saving GPS data for reading:", err);
+            }
+          );
+        }
+      }
+
+      const processedRisks = [];
+
+      for (const risk of risks) {
+        const { risk_type, risk_level, confidence } = risk;
+
+        // ========================================
+        // FIRE RISK - Incident-based grouping
+        // ========================================
+        if (risk_type === "fire") {
+          const ongoingFire = await new Promise((resolve, reject) => {
+            db.get(
+              `SELECT * FROM Risks 
+               WHERE nodeID = ? 
+               AND risk_type = 'fire' 
+               AND resolved_at IS NULL
+               ORDER BY timestamp DESC
+               LIMIT 1`,
+              [nodeID],
+              (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+              }
+            );
           });
-        } catch (e) {
-          console.warn("broadcastReading send error:", e?.message || e);
+
+          const isNewIncident = !ongoingFire;
+          const incidentTimestamp = ongoingFire ? ongoingFire.timestamp : timestamp;
+
+          const riskID = await new Promise((resolve, reject) => {
+            db.run(
+              `INSERT INTO Risks (
+                nodeID, 
+                readingID,
+                timestamp, 
+                updated_at, 
+                risk_type, 
+                fire_risklvl, 
+                confidence, 
+                cooldown_counter,
+                is_incident_start
+              )
+              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+              [
+                nodeID,
+                readingID,
+                incidentTimestamp,
+                timestamp,
+                risk_type, 
+                risk_level, 
+                confidence,
+                isNewIncident ? 1 : 0
+              ],
+              function(err) {
+                if (err) reject(err);
+                else {
+                  const msg = isNewIncident 
+                    ? `🔥 NEW fire incident started - riskID: ${this.lastID}` 
+                    : `🔥 Fire alert added to ongoing incident - riskID: ${this.lastID}`;
+                  console.log(msg);
+                  resolve(this.lastID);
+                }
+              }
+            );
+          });
+
+          if (ongoingFire) {
+            await new Promise((resolve, reject) => {
+              db.run(
+                `UPDATE Risks 
+                 SET cooldown_counter = 0,
+                     updated_at = ?
+                 WHERE riskID = ?`,
+                [timestamp, ongoingFire.riskID],
+                (err) => {
+                  if (err) reject(err);
+                  else {
+                    console.log(`   ↳ Reset cooldown for incident start riskID: ${ongoingFire.riskID}`);
+                    resolve();
+                  }
+                }
+              );
+            });
+          }
+
+          if (data?.gps && riskID) {
+            db.run(
+              `INSERT INTO GPSData (riskID, latitude, longitude, altitude, fix)
+               VALUES (?, ?, ?, ?, ?)`,
+              [riskID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
+              (err) => {
+                if (err) console.error("❌ Error saving GPS data for risk:", err);
+              }
+            );
+          }
+
+          processedRisks.push({
+            riskID,
+            risk_type,
+            risk_level,
+            confidence,
+            isNewIncident,
+            incidentTimestamp,
+            readingID
+          });
+        }
+        // ========================================
+        // CHAINSAW / GUNSHOTS - One-off events
+        // ========================================
+        else if (risk_type === "chainsaw" || risk_type === "gunshots") {
+          const riskID = await new Promise((resolve, reject) => {
+            db.run(
+              `INSERT INTO Risks (
+                nodeID,
+                readingID,
+                timestamp, 
+                updated_at, 
+                risk_type, 
+                confidence,
+                is_incident_start
+              )
+              VALUES (?, ?, ?, ?, ?, ?, 1)`,
+              [nodeID, readingID, timestamp, timestamp, risk_type, confidence],
+              function(err) {
+                if (err) reject(err);
+                else {
+                  console.log(`✅ ${risk_type} alert logged - riskID: ${this.lastID}`);
+                  resolve(this.lastID);
+                }
+              }
+            );
+          });
+
+          if (data?.gps && riskID) {
+            db.run(
+              `INSERT INTO GPSData (riskID, latitude, longitude, altitude, fix)
+               VALUES (?, ?, ?, ?, ?)`,
+              [riskID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
+              (err) => {
+                if (err) console.error("❌ Error saving GPS data for risk:", err);
+              }
+            );
+          }
+
+          processedRisks.push({
+            riskID,
+            risk_type,
+            confidence,
+            readingID
+          });
+        }
+      }
+
+      // Broadcast via WebSocket
+      const wsMessage = {
+        event: "risk_detected",
+        timestamp,
+        data: {
+          nodeID,
+          risks: processedRisks,
+          temperature: data?.temp_humid?.temperature,
+          humidity: data?.temp_humid?.humidity,
+          co_level: data?.gas?.co_ppm,
+          location: data?.gps,
+          rssi, // ✅ Include signal data
+          snr
         }
       };
 
-      if (readingOrId && typeof readingOrId === "object") {
-        const row = readingOrId;
-        if (row.latitude !== undefined || row.longitude !== undefined || row.altitude !== undefined || row.fix !== undefined) {
-          return send(row);
+      wsClients.forEach((client) => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify(wsMessage));
         }
-        const id = row.id ?? row.sensorReadingID ?? null;
-        if (id) {
-          db.get(
-            `SELECT sensorReadingID AS id, nodeID, timestamp, temperature, humidity, co_level, latitude, longitude, altitude, fix FROM Readings WHERE sensorReadingID = ?`,
-            [id],
-            (err, fresh) => {
-              if (!err && fresh) return send(fresh);
-              return send(row);
-            }
-          );
-          return;
+      });
+
+      console.log(`📤 Broadcasted ${processedRisks.length} risk(s)`);
+    }
+    // ========================================
+    // HANDLE READINGS (fire cooldown)
+    // ========================================
+    else if (type === "reading") {
+      const incidentStart = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT * FROM Risks 
+           WHERE nodeID = ? 
+           AND risk_type = 'fire' 
+           AND resolved_at IS NULL
+           AND is_incident_start = 1
+           ORDER BY timestamp DESC
+           LIMIT 1`,
+          [nodeID],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (incidentStart) {
+        const newCounter = incidentStart.cooldown_counter + 1;
+        
+        if (newCounter >= 5) {
+          await new Promise((resolve, reject) => {
+            db.run(
+              `UPDATE Risks 
+               SET resolved_at = ?
+               WHERE nodeID = ?
+               AND risk_type = 'fire'
+               AND timestamp = ?
+               AND resolved_at IS NULL`,
+              [timestamp, nodeID, incidentStart.timestamp],
+              function(err) {
+                if (err) reject(err);
+                else {
+                  console.log(`✅ Fire incident RESOLVED (${this.changes} alerts closed)`);
+                  
+                  wsClients.forEach((client) => {
+                    if (client.readyState === 1) {
+                      client.send(JSON.stringify({
+                        event: "fire_resolved",
+                        timestamp,
+                        data: { 
+                          nodeID,
+                          incidentTimestamp: incidentStart.timestamp,
+                          alertsResolved: this.changes
+                        }
+                      }));
+                    }
+                  });
+                  
+                  resolve();
+                }
+              }
+            );
+          });
+        } else {
+          await new Promise((resolve, reject) => {
+            db.run(
+              `UPDATE Risks 
+               SET cooldown_counter = ?,
+                   updated_at = ?
+               WHERE riskID = ?`,
+              [newCounter, timestamp, incidentStart.riskID],
+              (err) => {
+                if (err) reject(err);
+                else {
+                  console.log(`🔥 Fire incident cooldown: ${newCounter}/5`);
+                  
+                  wsClients.forEach((client) => {
+                    if (client.readyState === 1) {
+                      client.send(JSON.stringify({
+                        event: "fire_cooldown_update",
+                        timestamp,
+                        data: { 
+                          nodeID, 
+                          cooldown_counter: newCounter,
+                          incidentTimestamp: incidentStart.timestamp
+                        }
+                      }));
+                    }
+                  });
+                  
+                  resolve();
+                }
+              }
+            );
+          });
         }
-        return send(row);
       }
 
-      if (readingOrId) {
-        db.get(
-          `SELECT sensorReadingID AS id, nodeID, timestamp, temperature, humidity, co_level, latitude, longitude, altitude, fix FROM Readings WHERE sensorReadingID = ?`,
-          [readingOrId],
-          (err, fresh) => {
-            if (!err && fresh) return send(fresh);
-            return;
+      // Always insert reading
+      const readingID = await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO Readings (nodeID, timestamp, temperature, humidity, co_level)
+           VALUES (?, ?, ?, ?, ?)`,
+          [nodeID, timestamp, data?.temp_humid?.temperature, data?.temp_humid?.humidity, data?.gas?.co_ppm],
+          function(err) {
+            if (err) reject(err);
+            else {
+              console.log(`✅ Reading saved - readingID: ${this.lastID}`);
+              resolve(this.lastID);
+            }
+          }
+        );
+      });
+
+      if (data?.gps && readingID) {
+        db.run(
+          `INSERT INTO GPSData (readingID, latitude, longitude, altitude, fix)
+           VALUES (?, ?, ?, ?, ?)`,
+          [readingID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
+          (err) => {
+            if (err) console.error("❌ Error saving GPS data:", err);
           }
         );
       }
-    }
 
-    // Ensure per-node non-alert counters exist
-    req.app.locals.nodeNonAlertCounts = req.app.locals.nodeNonAlertCounts || {};
-
-    // Ensure SensorNode exists (create minimal row if missing)
-    function ensureSensorNode(nodeID, cb) {
-      if (!nodeID) return cb(new Error("missing nodeID"));
-      db.get("SELECT nodeID FROM SensorNode WHERE nodeID = ?", [nodeID], (err, row) => {
-        if (err) return cb(err);
-        if (row) return cb(null, row);
-        db.run("INSERT INTO SensorNode (nodeID, name, created_at) VALUES (?, ?, datetime('now','localtime'))", [nodeID, `node-${nodeID}`], function (insertErr) {
-          if (insertErr) return cb(insertErr);
-          db.get("SELECT nodeID FROM SensorNode WHERE rowid = ?", [this.lastID], (gErr, newRow) => {
-            if (gErr) return cb(gErr);
-            return cb(null, newRow);
-          });
-        });
+      // Broadcast reading with signal data
+      wsClients.forEach((client) => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({
+            event: "new_reading",
+            timestamp,
+            data: {
+              readingID,
+              nodeID,
+              temperature: data?.temp_humid?.temperature,
+              humidity: data?.temp_humid?.humidity,
+              co_level: data?.gas?.co_ppm,
+              location: data?.gps,
+              rssi, // ✅ Include signal data
+              snr
+            }
+          }));
+        }
       });
     }
 
-    // ---------- READING path ----------
-    if (payload.type === "reading") {
-      const { nodeID, data } = payload;
-      if (!nodeID) return res.status(400).json({ error: "nodeID required" });
-      ensureSensorNode(nodeID, (nErr) => {
-        if (nErr) {
-          console.error("ensureSensorNode error:", nErr);
-          return res.status(500).json({ error: "Failed to ensure SensorNode" });
-        }
-
-        const temperature = data?.temp_humid?.temperature ?? null;
-        const humidity = data?.temp_humid?.humidity ?? null;
-        const co_level = data?.gas?.co_ppm ?? null;
-        const latitude = data?.gps?.latitude ?? null;
-        const longitude = data?.gps?.longitude ?? null;
-        const altitude = data?.gps?.altitude ?? null;
-        const fix = data?.gps?.fix ? 1 : 0;
-
-        const insertSql = `
-          INSERT INTO Readings (nodeID, timestamp, temperature, humidity, co_level, latitude, longitude, altitude, fix)
-          VALUES (?, datetime('now','localtime'), ?, ?, ?, ?, ?, ?, ?)
-        `;
-        db.run(insertSql, [nodeID, temperature, humidity, co_level, latitude, longitude, altitude, fix], function (insErr) {
-          if (insErr) {
-            console.error("DB insert reading error:", insErr);
-            return res.status(500).json({ error: insErr.message });
-          }
-          const newReadingID = this.lastID;
-          db.get(`SELECT sensorReadingID AS id, nodeID, timestamp, temperature, humidity, co_level, latitude, longitude, altitude, fix FROM Readings WHERE sensorReadingID = ?`, [newReadingID], (gErr, readingRow) => {
-            if (gErr) {
-              console.error("DB error fetching new reading:", gErr);
-              return res.status(500).json({ error: gErr.message });
-            }
-            if (!readingRow) return res.status(201).json({ ok: true, id: newReadingID });
-
-            // broadcast reading SSE
-            broadcastReading(req.app, readingRow);
-
-            // non-alert counter logic (auto-expire etc.) — keep existing behavior
-            // ...existing non-alert handling...
-            return res.status(201).json({ data: readingRow });
-          });
-        });
-      });
-      return;
-    }
-    // ---------- ALERT path ----------
-    else if (payload.type === "alert") {
-      const { nodeID, data, risk_type, risk_level = null, confidence = null, readingID = null } = payload;
-      if (nodeID) req.app.locals.nodeNonAlertCounts[nodeID] = 0;
-      if (!nodeID || !risk_type) return res.status(400).json({ error: "nodeID and risk_type are required for alerts" });
-
-      ensureSensorNode(nodeID, (nErr) => {
-        if (nErr) {
-          console.error("ensureSensorNode error:", nErr);
-          return res.status(500).json({ error: "Failed to ensure SensorNode" });
-        }
-
-        // create a new Reading (snapshot) for this alert (even subsequent ones)
-        const temperature = data?.temp_humid?.temperature ?? null;
-        const humidity = data?.temp_humid?.humidity ?? null;
-        const co_level = data?.gas?.co_ppm ?? null;
-        const latitude = data?.gps?.latitude ?? null;
-        const longitude = data?.gps?.longitude ?? null;
-        const altitude = data?.gps?.altitude ?? null;
-        const fix = data?.gps?.fix ? 1 : 0;
-
-        const insertReadingSql = `
-          INSERT INTO Readings (nodeID, timestamp, temperature, humidity, co_level, latitude, longitude, altitude, fix)
-          VALUES (?, datetime('now','localtime'), ?, ?, ?, ?, ?, ?, ?)
-        `;
-        db.run(insertReadingSql, [nodeID, temperature, humidity, co_level, latitude, longitude, altitude, fix], function (insErr) {
-          if (insErr) {
-            console.error("DB insert reading error:", insErr);
-            return res.status(500).json({ error: insErr.message });
-          }
-          const newReadingID = this.lastID;
-
-          // fetch the reading row to return / broadcast
-          db.get(`SELECT sensorReadingID AS id, nodeID, timestamp, temperature, humidity, co_level, latitude, longitude, altitude, fix FROM Readings WHERE sensorReadingID = ?`, [newReadingID], (gErr, readingRow) => {
-            if (gErr) {
-              console.error("DB error fetching new reading:", gErr);
-              return res.status(500).json({ error: gErr.message });
-            }
-            if (!readingRow) {
-              // unexpected but handle gracefully
-              readingRow = { id: newReadingID, nodeID, timestamp: new Date().toISOString(), temperature, humidity, co_level, latitude, longitude, altitude, fix };
-            }
-
-            // find existing unresolved alert for same node & risk_type
-            db.get(`SELECT * FROM RiskDetection WHERE nodeID = ? AND risk_type = ? AND resolved = 0 ORDER BY datetime(timestamp) DESC LIMIT 1`, [nodeID, risk_type], (findErr, existing) => {
-              if (findErr) {
-                console.error("DB find existing incident error:", findErr);
-                return res.status(500).json({ error: findErr.message });
-              }
-
-              if (existing) {
-                // Subsequent alert -> update the existing risk row: latest readingID + timestamp + optionally update confidence/risk_level
-                db.run(`INSERT INTO RiskDetection (readingID, confidence, risk_level, timestamp) VALUES (?, ?, ?, datetime('now','localtime')) WHERE riskID = ?`, [newReadingID, confidence, risk_level, existing.riskID], function (uErr) {
-                  if (uErr) {
-                    console.error("DB update RiskDetection error:", uErr);
-                    // still return success for reading created
-                    return res.status(201).json({ modalAction: "append", riskID: existing.riskID, reading: readingRow });
-                  }
-                  // broadcast update + reading
-                  db.get(`SELECT * FROM RiskDetection WHERE riskID = ?`, [existing.riskID], (fErr, updatedRisk) => {
-                    if (fErr) {
-                      console.warn("Failed to fetch updated risk:", fErr);
-                      return res.status(201).json({ modalAction: "append", riskID: existing.riskID, reading: readingRow });
-                    }
-                    // SSE helpers (assumes broadcastRiskEvent & broadcastReading exist)
-                    try { broadcastRiskEvent(req.app, "risk_updated", updatedRisk); } catch(e) {}
-                    try { broadcastReading(req.app, readingRow); } catch(e) {}
-                    return res.status(200).json({ modalAction: "append", riskID: existing.riskID, reading: readingRow, risk: updatedRisk });
-                  });
-                });
-              } else {
-                // First alert -> create new RiskDetection and instruct frontend to open a modal
-                const sqlRisk = `INSERT INTO RiskDetection (nodeID, readingID, risk_type, risk_level, confidence, timestamp, resolved) VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), 0)`;
-                db.run(sqlRisk, [nodeID, newReadingID, risk_type, risk_level, confidence], function (rErr) {
-                  if (rErr) {
-                    console.error("DB insert RiskDetection error:", rErr);
-                    return res.status(500).json({ error: rErr.message });
-                  }
-                  const createdRiskID = this.lastID;
-                  db.get(`SELECT * FROM RiskDetection WHERE riskID = ?`, [createdRiskID], (fErr, newRiskRow) => {
-                    if (fErr) {
-                      console.warn("Failed to fetch new risk:", fErr);
-                      return res.status(201).json({ modalAction: "open", riskID: createdRiskID, reading: readingRow });
-                    }
-                    try { broadcastRiskEvent(req.app, "risk_created", newRiskRow); } catch(e) {}
-                    try { broadcastReading(req.app, readingRow); } catch(e) {}
-                    return res.status(201).json({ modalAction: "open", riskID: createdRiskID, reading: readingRow, risk: newRiskRow });
-                  });
-                });
-              }
-            }); // end find existing
-          }); // end get reading
-        }); // end insert reading
-      }); // end ensureSensorNode
-      return;
-    }
-    else {
-      return res.status(400).json({ error: "Unknown message type" });
-    }
- } catch (err) {
-   console.error("❌ Error processing Lora message:", err);
-   return res.status(500).json({ error: "Server error" });
- }
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("❌ Error processing LoRa message:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 module.exports = router;
+
+// real-time data pipeline: LoRa Gateway → Server → Database + WebSocket → Dashboard
