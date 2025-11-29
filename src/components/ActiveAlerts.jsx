@@ -1,89 +1,66 @@
-import * as React from "react";
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  useTheme,
-  Modal,
-  Button,
-  Chip,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-} from "@mui/material";
-import { tokens } from "../theme";
-import WhatshotIcon from '@mui/icons-material/Whatshot';
-import ParkIcon from '@mui/icons-material/Park';
-import PetsIcon from '@mui/icons-material/Pets';
-import { useWebSocket } from "../hooks/useWebSocket";
+import { Box, Card, Text, Title, Badge, Table, Indicator } from '@mantine/core';
+import { modals } from '@mantine/modals';
+import { FireIcon, TreeIcon, PawPrintIcon, CheckIcon } from "@phosphor-icons/react";
 
-const ActiveAlerts = () => {
-  const theme = useTheme();
-  const colors = tokens(theme.palette.mode);
+export function ActiveAlerts({ activeAlerts, onResolve, API }) {
+  // Alert configs with proper theme colors
+  const alertConfigs = {
+    "Wildfire Risk": { 
+      color: "alert-red", 
+      bg: "alert-red.2", 
+      textColor: "alert-red.9",
+      subtextColor: "alert-red.8",
+      iconColor: "#e03131",
+      icon: FireIcon
+    },
+    "Illegal Logging": { 
+      color: "chocolate-plum", 
+      bg: "chocolate-plum.2", 
+      textColor: "chocolate-plum.9",
+      subtextColor: "chocolate-plum.8",
+      iconColor: "var(--mantine-color-chocolate-plum-9)",
+      icon: TreeIcon 
+    },
+    "Poaching": { 
+      color: "verdigris", 
+      bg: "verdigris.2", 
+      textColor: "verdigris.9",
+      subtextColor: "verdigris.8",
+      iconColor: "var(--mantine-color-verdigris-9)",
+      icon: PawPrintIcon 
+    }
+  };
 
-  const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-  const WS_URL = API.replace(/^http/, "ws");
-
-  const { lastMessage } = useWebSocket(WS_URL);
-
-  const [open, setOpen] = React.useState(false);
-  const [selectedAlert, setSelectedAlert] = React.useState(null);
-  const [selectedAlertReadings, setSelectedAlertReadings] = React.useState([]);
-  const [elapsed, setElapsed] = React.useState("00");
-  const [activeAlerts, setActiveAlerts] = React.useState([]);
-  const [resolving, setResolving] = React.useState(false);
-
-  // Format confidence
   const formatConfidence = (c) => {
     if (c === null || c === undefined) return "N/A";
     const n = Number(c);
-    if (!isNaN(n)) return n <= 1 ? `${(n * 100).toFixed(1)}%` : String(n);
-    return String(c);
+    return !isNaN(n) && n <= 1 ? `${(n * 100).toFixed(1)}%` : String(c);
   };
 
-  // Map backend risk to UI alert
-  const mapRisk = (r) => {
-    const typeMap = { 
-      fire: "Wildfire Risk", 
-      chainsaw: "Illegal Logging", 
-      gunshots: "Poaching" 
-    };
-    const severityMap = { 
-      high: "High", 
-      medium: "Moderate", 
-      low: "Low" 
-    };
-
-    return {
-      id: r.riskID,
-      type: typeMap[r.risk_type] || "Unknown",
-      node: r.nodeName || `Node ${r.nodeID}`,
-      nodeID: r.nodeID,
-      timestamp: r.timestamp,
-      updated_at: r.updated_at,
-      severity: severityMap[String(r.fire_risklvl || "").toLowerCase()] || "N/A",
-      confidence: r.confidence,
-      status: r.resolved_at ? "Resolved" : "Active",
-      resolved_at: r.resolved_at,
-      risk_type: r.risk_type,
-      is_incident_start: r.is_incident_start,
-      cooldown_counter: r.cooldown_counter,
-      temperature: r.temperature,
-      humidity: r.humidity,
-      co_level: r.co_level,
-      incidentTimestamp: r.timestamp, // For grouping fire incidents
-    };
+  const calculateElapsedTime = (timestamp) => {
+    const alertTime = new Date(timestamp).getTime();
+    const now = Date.now();
+    const diff = Math.floor((now - alertTime) / 1000);
+    
+    const hours = Math.floor(diff / 3600);
+    const minutes = Math.floor((diff % 3600) / 60);
+    const seconds = diff % 60;
+    
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    } else if (minutes > 0) {
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    } else {
+      return `${seconds}s`;
+    }
   };
 
-  // Open modal and fetch readings
-  const handleOpen = async (alert) => {
-    setSelectedAlert(alert);
-    setOpen(true);
+  const openAlertModal = async (alert) => {
+    const config = alertConfigs[alert.type] || alertConfigs["Wildfire Risk"];
+    const elapsed = calculateElapsedTime(alert.timestamp);
 
-    // For fire risks, fetch all alerts in the incident
+    // Fetch incident data for fire alerts
+    let incidentData = [];
     if (alert.risk_type === "fire") {
       try {
         const res = await fetch(
@@ -92,458 +69,268 @@ const ActiveAlerts = () => {
         
         if (res.ok) {
           const json = await res.json();
-          console.log("📊 Fire incident data:", json); // Debug log
-          
-          const alerts = (json?.alerts || []).map(a => ({
+          incidentData = (json?.alerts || []).map(a => ({
             timestamp: a.updated_at,
             temperature: a.temperature,
             humidity: a.humidity,
             co_level: a.co_level,
             fire_risklvl: a.fire_risklvl,
-            confidence: a.confidence,
-            readingID: a.readingID,
           }));
-          
-          console.log("📊 Mapped alerts:", alerts); // Debug log
-          setSelectedAlertReadings(alerts);
-        } else {
-          console.error("Failed to fetch fire incident:", res.status);
         }
       } catch (err) {
-        console.error("Error fetching fire incident readings:", err);
+        console.error("Error fetching fire incident:", err);
       }
     }
-  };
 
-  const handleClose = () => {
-    setOpen(false);
-    setSelectedAlert(null);
-    setSelectedAlertReadings([]);
-  };
-
-  const handleResolve = async () => {
-    if (!selectedAlert) return;
-    setResolving(true);
-    
-    try {
-      const res = await fetch(`${API}/api/risks/${selectedAlert.id}/resolve`, { 
-        method: "PATCH" 
-      });
-      
-      if (!res.ok) {
-        console.error("Failed to resolve risk:", await res.text());
-        return;
-      }
-
-      // Remove from active alerts
-      if (selectedAlert.risk_type === "fire") {
-        // Remove all fire alerts with same incident timestamp
-        setActiveAlerts(prev => 
-          prev.filter(a => 
-            !(a.nodeID === selectedAlert.nodeID && 
-              a.incidentTimestamp === selectedAlert.incidentTimestamp && 
-              a.risk_type === "fire")
-          )
-        );
-      } else {
-        // Remove single alert
-        setActiveAlerts(prev => prev.filter(a => a.id !== selectedAlert.id));
-      }
-      
-      handleClose();
-    } catch (err) {
-      console.error("Error resolving risk:", err);
-    } finally {
-      setResolving(false);
-    }
-  };
-
-  // Track elapsed time
-  React.useEffect(() => {
-    if (!selectedAlert) return;
-
-    const alertTime = new Date(selectedAlert.timestamp).getTime();
-
-    const timer = setInterval(() => {
-      const now = Date.now();
-      const diff = Math.floor((now - alertTime) / 1000);
-
-      const hours = Math.floor(diff / 3600);
-      const minutes = Math.floor((diff % 3600) / 60);
-      const seconds = diff % 60;
-
-      let formatted;
-      if (hours > 0) {
-        formatted = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-      } else if (minutes > 0) {
-        formatted = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-      } else {
-        formatted = String(seconds).padStart(2, "0");
-      }
-
-      setElapsed(formatted);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [selectedAlert]);
-
-  // Initial fetch - Get ONLY incident starts for fire, all others normally
-  React.useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API}/api/risks/active/all`);
-        if (!res.ok) return;
-        
-        const json = await res.json();
-        const allActive = (json?.risks || []);
-        
-        // ✅ Filter: For fire risks, only keep incident starts
-        const filtered = allActive.filter(r => {
-          if (r.risk_type === "fire") {
-            return r.is_incident_start === 1;
-          }
-          return true; // Keep all chainsaw/gunshots
-        });
-        
-        const active = filtered.map(mapRisk);
-        setActiveAlerts(active);
-        console.log(`✅ Loaded ${active.length} active alerts (${filtered.filter(r => r.risk_type === 'fire').length} fire incidents)`);
-      } catch (err) {
-        console.error("Error fetching active risks:", err);
-      }
-    })();
-  }, [API]);
-
-  // WebSocket updates
-  React.useEffect(() => {
-    if (!lastMessage) return;
-
-    console.log("📨 ActiveAlerts WebSocket:", lastMessage.event);
-
-    // New risk detected
-    if (lastMessage.event === "risk_detected") {
-      const risks = lastMessage.data?.risks || [];
-      
-      risks.forEach(risk => {
-        const newAlert = mapRisk({
-          riskID: risk.riskID,
-          nodeID: lastMessage.data.nodeID,
-          timestamp: risk.incidentTimestamp || lastMessage.timestamp,
-          updated_at: lastMessage.timestamp,
-          risk_type: risk.risk_type,
-          fire_risklvl: risk.risk_level,
-          confidence: risk.confidence,
-          resolved_at: null,
-          is_incident_start: risk.isNewIncident ? 1 : 0,
-          cooldown_counter: 0,
-          temperature: lastMessage.data.temperature,
-          humidity: lastMessage.data.humidity,
-          co_level: lastMessage.data.co_level,
-        });
-
-        setActiveAlerts(prev => {
-          // ✅ For fire: Only add if it's a NEW incident start
-          if (risk.risk_type === "fire") {
-            if (risk.isNewIncident) {
-              console.log("🔥 New fire incident added to active alerts");
-              return [newAlert, ...prev];
-            } else {
-              console.log("🔥 Fire alert added to existing incident (not shown in active alerts)");
-              return prev; // Don't add subsequent alerts
-            }
-          }
-          
-          // ✅ For chainsaw/gunshots: Add normally
-          return [newAlert, ...prev];
-        });
-      });
-    }
-
-    // Fire cooldown update - update the incident start card
-    if (lastMessage.event === "fire_cooldown_update") {
-      const { nodeID, incidentTimestamp, cooldown_counter } = lastMessage.data;
-      
-      setActiveAlerts(prev =>
-        prev.map(a =>
-          a.nodeID === nodeID && 
-          a.incidentTimestamp === incidentTimestamp && 
-          a.risk_type === "fire"
-            ? { ...a, cooldown_counter, updated_at: lastMessage.timestamp }
-            : a
-        )
+    const incidentRows = incidentData.map((reading, index) => {
+      const severity = reading.fire_risklvl === "high" ? "High" :
+                      reading.fire_risklvl === "medium" ? "Moderate" : "Low";
+      return (
+        <Table.Tr key={index}>
+          <Table.Td>{new Date(reading.timestamp).toLocaleTimeString()}</Table.Td>
+          <Table.Td>{reading.temperature?.toFixed(1) ?? "—"}</Table.Td>
+          <Table.Td>{reading.humidity?.toFixed(1) ?? "—"}</Table.Td>
+          <Table.Td>{reading.co_level ?? "—"}</Table.Td>
+          <Table.Td>
+            <Badge 
+              color={severity === "High" ? "red" : severity === "Moderate" ? "orange" : "yellow"}
+              variant="filled"
+              size="sm"
+            >
+              {severity}
+            </Badge>
+          </Table.Td>
+        </Table.Tr>
       );
-    }
+    });
 
-    // Fire resolved
-    if (lastMessage.event === "fire_resolved" || lastMessage.event === "fire_resolved_manual") {
-      const { nodeID, incidentTimestamp } = lastMessage.data;
-      
-      setActiveAlerts(prev =>
-        prev.filter(a =>
-          !(a.nodeID === nodeID && a.incidentTimestamp === incidentTimestamp && a.risk_type === "fire")
-        )
-      );
-      
-      console.log("✅ Fire incident removed from active alerts");
-    }
-
-    // Single risk resolved
-    if (lastMessage.event === "risk_resolved") {
-      const { riskID } = lastMessage.data;
-      setActiveAlerts(prev => prev.filter(a => a.id !== riskID));
-    }
-  }, [lastMessage]);
-
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        gap: 1.5,
-        overflowX: "auto",
-        py: 1,
-        scrollbarWidth: "thin",
-        "&::-webkit-scrollbar": { height: 8 },
-        "&::-webkit-scrollbar-thumb": {
-          background: colors.green[700],
-          borderRadius: 4,
-        },
-      }}
-    >
-      {activeAlerts.length === 0 ? (
-        <Typography color={colors.grey[400]}>No active alerts.</Typography>
-      ) : (
-        activeAlerts.map((alert) => (
-          <Card
-            key={`${alert.risk_type}-${alert.nodeID}-${alert.incidentTimestamp}`}
-            onClick={() => handleOpen(alert)}
-            sx={{
-              minWidth: 220,
-              backgroundColor:
-                alert.type === "Wildfire Risk"
-                  ? colors.red[900]
-                  : alert.type === "Illegal Logging"
-                  ? colors.brown?.[900] ?? colors.grey[800]
-                  : alert.type === "Poaching"
-                  ? colors.blue[900]
-                  : colors.grey[800],
-              color: colors.grey[100],
-              flex: "0 0 auto",
-              boxShadow: "none",
-              cursor: "pointer",
-            }}
+    modals.openConfirmModal({
+      title: (
+        <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '1rem', marginTop: '0.8rem' }}>
+          <Title order={4} c={config.textColor}>
+            {alert.type}
+          </Title>
+          <Badge 
+            color={config.color}
+            variant="filled" 
+            size="lg"
           >
-            <CardContent>
-              <Typography
-                variant="h6"
-                fontWeight={700}
-                color={
-                  alert.type === "Wildfire Risk"
-                    ? colors.red[400]
-                    : alert.type === "Illegal Logging"
-                    ? colors.brown?.[400] ?? colors.grey[400]
-                    : alert.type === "Poaching"
-                    ? colors.blue[400]
-                    : colors.grey[400]
-                }
-              >
-                {alert.type}
-              </Typography>
-              <Box display="flex" flexDirection="column" mt={1}>
-                <Typography variant="caption" color={colors.grey[400]}>
-                  Detected By: {alert.node}
-                </Typography>
-                <Typography variant="caption" color={colors.grey[400]}>
-                  At: {alert.timestamp ? new Date(alert.timestamp).toLocaleString() : ""}
-                </Typography>
-                {/* Show cooldown for fire incidents */}
-                {alert.risk_type === "fire" && alert.cooldown_counter > 0 && (
-                  <Typography variant="caption" color={colors.orange[400]} fontWeight={600}>
-                    Cooldown: {alert.cooldown_counter}/5
-                  </Typography>
-                )}
-              </Box>
-            </CardContent>
-          </Card>
-        ))
-      )}
+            Time Elapsed: {elapsed}
+          </Badge>
+        </Box>
+      ),
+      size: alert.type === "Wildfire Risk" ? "xl" : "lg",
+      centered: true,
+      children: (
+        <Box mt="md">
+          {/* Alert details */}
+          <Text mb="sm" fw="600">
+            Detected By: <Text span ms="sm" fw="400">{alert.node}</Text>
+          </Text>
+          <Text mb="sm" fw="600">
+            Detected At: <Text span ms="sm" fw="400">{new Date(alert.timestamp).toLocaleString()}</Text>
+          </Text>
+          
+          {alert.confidence && (
+            <Text mb="sm" fw="600">
+              Confidence: <Text span ms="sm" fw="400">{formatConfidence(alert.confidence)}</Text>
+            </Text>
+          )}
 
-      {/* Alert Modal */}
-      <Modal open={open} onClose={handleClose}>
-        <Box
-          sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            bgcolor: "background.paper",
-            borderRadius: 2,
-            boxShadow: 24,
-            p: 4,
-            display: "flex",
-            flexDirection: "column",
-            width: selectedAlert?.type === "Wildfire Risk" ? 800 : 550,
-            height: selectedAlert?.type === "Wildfire Risk" ? 500 : 300,
-          }}
-        >
-          {selectedAlert && (
+          {/* Show initial readings for fire alerts */}
+          {alert.risk_type === "fire" && (
             <>
-              {/* Modal Header */}
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  mb: 2,
-                }}
-              >
-                <Typography
-                  variant="h4"
-                  fontWeight={600}
-                  color={
-                    selectedAlert.type === "Wildfire Risk"
-                      ? colors.red[400]
-                      : selectedAlert.type === "Illegal Logging"
-                      ? colors.brown?.[400] ?? colors.grey[400]
-                      : colors.blue[400]
-                  }
-                >
-                  {selectedAlert.type === "Wildfire Risk" ? <WhatshotIcon sx={{fontSize: 20}} /> :
-                    selectedAlert.type === "Illegal Logging" ? <ParkIcon sx={{fontSize: 20}} /> :
-                    <PetsIcon sx={{fontSize: 20}} />}
-                  {" "}{selectedAlert.type}
-                </Typography>
-
-                <Chip
-                  label={`Time Elapsed: ${elapsed}`}
-                  sx={{
-                    fontSize: "0.9rem",
-                    fontWeight: 600,
-                    px: 1,
-                    backgroundColor:
-                      selectedAlert.type === "Wildfire Risk"
-                        ? colors.red[400]
-                        : selectedAlert.type === "Illegal Logging"
-                        ? colors.brown?.[400]
-                        : colors.blue[400],
-                    color: colors.grey[900],
-                  }}
-                />
-              </Box>
-
-              {/* Modal Body */}
-              <Box sx={{ flex: 1, overflowY: "auto" }}>
-                <Typography mb={1.2}>
-                  <strong>Detected By:</strong> {selectedAlert.node}
-                </Typography>
-                <Typography mb={1.2}>
-                  <strong>Detected At:</strong>{" "}
-                  {new Date(selectedAlert.timestamp).toLocaleString()}
-                </Typography>
-
-                {/* Show confidence for audio alerts */}
-                {selectedAlert.confidence != null && (
-                  <Typography mb={1.2}>
-                    <strong>Confidence:</strong> {formatConfidence(selectedAlert.confidence)}
-                  </Typography>
-                )}
-
-                {/* Show initial readings */}
-                {selectedAlert.temperature != null && (
-                  <Typography mb={1.2}>
-                    <strong>Initial Temperature:</strong> {selectedAlert.temperature.toFixed(1)}°C
-                  </Typography>
-                )}
-                {selectedAlert.humidity != null && (
-                  <Typography mb={1.2}>
-                    <strong>Initial Humidity:</strong> {selectedAlert.humidity.toFixed(1)}%
-                  </Typography>
-                )}
-                {selectedAlert.co_level != null && (
-                  <Typography mb={1.2}>
-                    <strong>Initial CO Level:</strong> {selectedAlert.co_level} ppm
-                  </Typography>
-                )}
-
-                {/* Fire incident readings timeline */}
-                {selectedAlert.type === "Wildfire Risk" && selectedAlertReadings.length > 0 && (
-                  <Box mt={2}>
-                    <Typography variant="h6" gutterBottom>
-                      Fire Incident Timeline ({selectedAlertReadings.length} alerts):
-                    </Typography>
-
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell><strong>Time</strong></TableCell>
-                          <TableCell><strong>Temp (°C)</strong></TableCell>
-                          <TableCell><strong>Humidity (%)</strong></TableCell>
-                          <TableCell><strong>CO (ppm)</strong></TableCell>
-                          <TableCell><strong>Severity</strong></TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {selectedAlertReadings.map((reading, idx) => {
-                          const severity =
-                            reading.fire_risklvl === "high" ? "High" :
-                            reading.fire_risklvl === "medium" ? "Moderate" : "Low";
-
-                          return (
-                            <TableRow key={idx}>
-                              <TableCell>
-                                {new Date(reading.timestamp).toLocaleTimeString()}
-                              </TableCell>
-                              <TableCell>{reading.temperature?.toFixed(1) ?? "—"}</TableCell>
-                              <TableCell>{reading.humidity?.toFixed(1) ?? "—"}</TableCell>
-                              <TableCell>{reading.co_level ?? "—"}</TableCell>
-                              <TableCell
-                                sx={{
-                                  fontWeight: "bold",
-                                  color:
-                                    severity === "High" ? "red" :
-                                    severity === "Moderate" ? "orange" : "green",
-                                }}
-                              >
-                                {severity}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </Box>
-                )}
-              </Box>
-
-              {/* Modal Footer */}
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 1,
-                  mt: 2,
-                  pt: 2,
-                  borderTop: "1px solid #ccc",
-                }}
-              >
-                <Button onClick={handleClose} variant="outlined">
-                  Close
-                </Button>
-
-                <Button 
-                  variant="contained" 
-                  color={selectedAlert.type === "Wildfire Risk" ? "error" : "primary"}
-                  onClick={handleResolve} 
-                  disabled={resolving}
-                >
-                  {resolving ? "Resolving…" : "Resolve"}
-                </Button>
-              </Box>
+              {alert.temperature != null && (
+                <Text mb="sm" fw="600">
+                  Initial Temperature: <Text span ms="sm" fw="400">{alert.temperature.toFixed(1)}°C</Text>
+                </Text>
+              )}
+              {alert.humidity != null && (
+                <Text mb="sm" fw="600">
+                  Initial Humidity: <Text span ms="sm" fw="400">{alert.humidity.toFixed(1)}%</Text>
+                </Text>
+              )}
+              {alert.co_level != null && (
+                <Text mb="sm" fw="600">
+                  Initial CO Level: <Text span ms="sm" fw="400">{alert.co_level} ppm</Text>
+                </Text>
+              )}
             </>
           )}
-        </Box>
-      </Modal>
-    </Box>
-  );
-};
 
-export default ActiveAlerts;
+          {/* Fire incident timeline */}
+          {alert.type === "Wildfire Risk" && incidentData.length > 0 && (
+            <Box mt="lg">
+              <Text mb="md" fw="600">
+                Fire Incident Timeline ({incidentData.length} alerts):
+              </Text>
+              <Box style={{ maxHeight: '250px', overflow: 'auto' }}>
+                <Table size="sm">
+                  <Table.Thead style={{ 
+                    position: 'sticky', 
+                    top: 0, 
+                    backgroundColor: 'var(--mantine-color-body)', 
+                    zIndex: 1 
+                  }}>
+                    <Table.Tr>
+                      <Table.Th>Timestamp</Table.Th>
+                      <Table.Th>Temperature</Table.Th>
+                      <Table.Th>Humidity</Table.Th>
+                      <Table.Th>CO Level</Table.Th>
+                      <Table.Th>Severity</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>{incidentRows}</Table.Tbody>
+                </Table>
+              </Box>
+            </Box>
+          )}
+        </Box>
+      ),
+      labels: { 
+        confirm: 'Resolve Alert', 
+        cancel: 'Close' 
+      },
+      confirmProps: { 
+        color: config.color,
+        leftSection: <CheckIcon size={16} weight="bold" />
+      },
+      cancelProps: {
+        color: 'gray',
+        variant: 'subtle'
+      },
+      onCancel: () => {
+        console.log('Modal closed');
+      },
+      onConfirm: async () => {
+        console.log('Resolving alert:', alert.id);
+        
+        try {
+          // ✅ Use the correct API endpoint like in MUI version
+          const res = await fetch(`${API}/api/risks/${alert.id}/resolve`, { 
+            method: "PATCH" 
+          });
+          
+          if (!res.ok) {
+            console.error("Failed to resolve risk:", await res.text());
+            return;
+          }
+
+          console.log("✅ Alert resolved successfully");
+          
+          // ✅ Call the parent's onResolve to update state
+          if (onResolve) {
+            await onResolve(alert);
+          }
+        } catch (err) {
+          console.error("❌ Error resolving alert:", err);
+        }
+      },
+    });
+  };
+
+  return (
+    <Card radius="lg" shadow="sm" p="lg">
+      <Text tt="uppercase" c="dimmed" size="xs" fw="700">
+        Active Alerts ({activeAlerts.length})
+      </Text>
+
+      {/* Alert cards container with dynamic height */}
+      <Box 
+        pt="lg"
+        style={{ 
+          display: 'flex', 
+          gap: '1.5rem', 
+          overflowX: 'auto', 
+          overflowY: 'visible', 
+          paddingTop: '0.23rem', 
+          paddingBottom: '0.5rem',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          minHeight: activeAlerts.length > 0 ? '140px' : '80px',
+          height: "fit-content",
+          position: 'relative',
+        }} 
+        sx={{ 
+          '&::-webkit-scrollbar': { display: 'none' },
+          '&::after': activeAlerts.length > 1 ? {
+            content: '""',
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: '60px',
+            background: 'linear-gradient(to right, transparent, var(--mantine-color-body))',
+            pointerEvents: 'none',
+          } : {}
+        }}
+      >
+        {activeAlerts.length === 0 ? (
+          <Text c="dimmed" size="sm" py="md">No active alerts</Text>
+        ) : (
+          activeAlerts.map((alert) => {
+            const config = alertConfigs[alert.type] || alertConfigs["Wildfire Risk"];
+            
+            return (
+              <Box 
+                key={`${alert.risk_type}-${alert.nodeID}-${alert.incidentTimestamp}`} 
+                style={{ 
+                  display: 'inline-block', 
+                  width: 'fit-content', 
+                  flexShrink: 0
+                }}
+              >
+                <Indicator color={config.color} size={20} withBorder processing>
+                  <Card 
+                    bg={config.bg}
+                    radius="lg" 
+                    shadow="sm" 
+                    p="md" 
+                    style={{ 
+                      cursor: 'pointer', 
+                      transition: 'transform 0.2s', 
+                      width: '200px',
+                      height: '120px'
+                    }}
+                    onClick={() => openAlertModal(alert)}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    <Box style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '1.2rem',
+                      height: '100%',
+                      justifyContent: 'space-between'
+                    }}>
+                      {/* Alert header with icon */}
+                      <Box style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <config.icon size={22} color={config.iconColor} weight="duotone" />
+                        <Title order={5} c={config.textColor}>{alert.type}</Title>
+                      </Box>
+
+                      {/* Alert details */}
+                      <Box>
+                        <Text size="xs" c={config.subtextColor} mb="0.3rem">
+                          Detected by {alert.node}
+                        </Text>
+                        <Text size="xs" c={config.subtextColor}>
+                          {new Date(alert.timestamp).toLocaleString()}
+                        </Text>
+                        {alert.risk_type === "fire" && alert.cooldown_counter > 0 && (
+                          <Text size="xs" c={config.subtextColor} fw={600} mt="0.3rem">
+                            Cooldown: {alert.cooldown_counter}/5
+                          </Text>
+                        )}
+                      </Box>
+                    </Box>
+                  </Card>
+                </Indicator>
+              </Box>
+            );
+          })
+        )}
+      </Box>
+    </Card>
+  );
+}
