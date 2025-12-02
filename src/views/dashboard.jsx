@@ -70,7 +70,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        console.log("🔄 Fetching dashboard data...");
+        console.log("🔄 Fetching dashboard data.  ..");
 
         // ✅ Fetch nodes
         const nodesPromise = fetch(`${API}/api/sensornodes`)

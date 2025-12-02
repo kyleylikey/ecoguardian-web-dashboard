@@ -27,8 +27,9 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 const wsClients = new Set();
 
-wss.on('connection', (ws) => {
-  console.log('🔌 New WebSocket client connected');
+wss.on('connection', (ws, req) => {
+  const clientId = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
+  console.log(`🔌 New WebSocket client connected: ${clientId}`);
   wsClients.add(ws);
 
   // Send welcome message
@@ -40,21 +41,42 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (message) => {
     console.log('📨 Received from client:', message.toString());
-    // Optional: Handle client messages here
   });
 
   ws.on('close', () => {
-    console.log('🔌 Client disconnected');
+    console.log(`🔌 Client disconnected: ${clientId}`);
     wsClients.delete(ws);
     console.log(`   Active connections: ${wsClients.size}`);
   });
 
   ws.on('error', (error) => {
-    console.error('❌ WebSocket error:', error);
+    console.error(`❌ WebSocket error for ${clientId}:`, error.message);
     wsClients.delete(ws);
   });
 
+  // ✅ Add ping/pong to detect dead connections
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+
   console.log(`   Active connections: ${wsClients.size}`);
+});
+
+// ✅ Heartbeat to clean up dead connections
+const heartbeatInterval = setInterval(() => {
+  wsClients.forEach((ws) => {
+    if (!ws.isAlive) {
+      console.log('💀 Terminating dead connection');
+      return ws.terminate();
+    }
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000); // Every 30 seconds
+
+wss.on('close', () => {
+  clearInterval(heartbeatInterval);
 });
 
 // Make wsClients available to routes
