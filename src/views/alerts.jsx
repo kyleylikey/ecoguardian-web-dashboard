@@ -549,32 +549,40 @@ const Alerts = () => {
       });
     }
 
-    // Fire cooldown update
-    else if (lastMessage.event === "fire_cooldown_update") {
-      const { nodeID, incidentTimestamp, cooldown_counter } = lastMessage.data;
+    // Cooldown update for any risk type
+    else if (lastMessage.event === "fire_cooldown_update" || 
+             lastMessage.event === "chainsaw_cooldown_update" || 
+             lastMessage.event === "gunshots_cooldown_update") {
+      const { nodeID, incidentTimestamp, cooldown_counter, risk_type } = lastMessage.data;
 
       setRows((prev) =>
         prev.map((r) =>
           r.nodeID === nodeID &&
           r.timestamp === incidentTimestamp &&
-          r.risk_type === "fire"
+          r.risk_type === risk_type
             ? { ...r, cooldown_counter, updated_at: lastMessage.timestamp }
             : r
         )
       );
 
-      console.log(`🔥 Fire cooldown update: ${cooldown_counter}/5`);
+      const emoji = risk_type === 'fire' ? '🔥' : risk_type === 'chainsaw' ? '🪚' : '🔫';
+      console.log(`${emoji} ${risk_type} cooldown update: ${cooldown_counter}/5`);
     }
 
-    // Fire resolved
-    else if (lastMessage.event === "fire_resolved" || lastMessage.event === "fire_resolved_manual") {
-      const { nodeID, incidentTimestamp } = lastMessage.data;
+    // Incident resolved for any risk type
+    else if (lastMessage.event === "fire_resolved" || 
+             lastMessage.event === "fire_resolved_manual" ||
+             lastMessage.event === "chainsaw_resolved" ||
+             lastMessage.event === "chainsaw_resolved_manual" ||
+             lastMessage.event === "gunshots_resolved" ||
+             lastMessage.event === "gunshots_resolved_manual") {
+      const { nodeID, incidentTimestamp, risk_type } = lastMessage.data;
 
       setRows((prev) =>
         prev.map((r) =>
           r.nodeID === nodeID &&
           r.timestamp === incidentTimestamp &&
-          r.risk_type === "fire"
+          r.risk_type === risk_type
             ? {
                 ...r,
                 status: "Resolved",
@@ -585,10 +593,11 @@ const Alerts = () => {
         )
       );
 
-      console.log(`✅ Fire incident resolved for Node ${nodeID}`);
+      const emoji = risk_type === 'fire' ? '🔥' : risk_type === 'chainsaw' ? '🪚' : '🔫';
+      console.log(`✅ ${risk_type} incident resolved for Node ${nodeID}`);
     }
 
-    // Single risk resolved
+    // Single risk resolved (legacy/fallback)
     else if (lastMessage.event === "risk_resolved") {
       const { riskID } = lastMessage.data;
 

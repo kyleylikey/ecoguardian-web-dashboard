@@ -59,12 +59,12 @@ export function ActiveAlerts({ activeAlerts, onResolve, API }) {
     const config = alertConfigs[alert.type] || alertConfigs["Wildfire Risk"];
     const elapsed = calculateElapsedTime(alert.timestamp);
 
-    // Fetch incident data for fire alerts
+    // Fetch incident data for all risk types
     let incidentData = [];
-    if (alert.risk_type === "fire") {
+    if (alert.risk_type && alert.incidentTimestamp && alert.nodeID) {
       try {
         const res = await fetch(
-          `${API}/api/risks/incidents/fire/${encodeURIComponent(alert.incidentTimestamp)}?nodeID=${alert.nodeID}`
+          `${API}/api/risks/incidents/${alert.risk_type}/${encodeURIComponent(alert.incidentTimestamp)}?nodeID=${alert.nodeID}`
         );
         
         if (res.ok) {
@@ -75,33 +75,46 @@ export function ActiveAlerts({ activeAlerts, onResolve, API }) {
             humidity: a.humidity,
             co_level: a.co_level,
             fire_risklvl: a.fire_risklvl,
+            confidence: a.confidence,
           }));
         }
       } catch (err) {
-        console.error("Error fetching fire incident:", err);
+        console.error(`Error fetching ${alert.risk_type} incident:`, err);
       }
     }
 
+    // Render incident rows based on risk type
     const incidentRows = incidentData.map((reading, index) => {
-      const severity = reading.fire_risklvl === "high" ? "High" :
-                      reading.fire_risklvl === "medium" ? "Moderate" : "Low";
-      return (
-        <Table.Tr key={index}>
-          <Table.Td>{new Date(reading.timestamp).toLocaleTimeString()}</Table.Td>
-          <Table.Td>{reading.temperature?.toFixed(1) ?? "—"}</Table.Td>
-          <Table.Td>{reading.humidity?.toFixed(1) ?? "—"}</Table.Td>
-          <Table.Td>{reading.co_level ?? "—"}</Table.Td>
-          <Table.Td>
-            <Badge 
-              color={severity === "High" ? "red" : severity === "Moderate" ? "orange" : "yellow"}
-              variant="filled"
-              size="sm"
-            >
-              {severity}
-            </Badge>
-          </Table.Td>
-        </Table.Tr>
-      );
+      if (alert.risk_type === "fire") {
+        const severity = reading.fire_risklvl === "high" ? "High" :
+                        reading.fire_risklvl === "medium" ? "Moderate" : "Low";
+        return (
+          <Table.Tr key={index}>
+            <Table.Td>{new Date(reading.timestamp).toLocaleTimeString()}</Table.Td>
+            <Table.Td>{reading.temperature?.toFixed(1) ?? "—"}</Table.Td>
+            <Table.Td>{reading.humidity?.toFixed(1) ?? "—"}</Table.Td>
+            <Table.Td>{reading.co_level ?? "—"}</Table.Td>
+            <Table.Td>
+              <Badge 
+                color={severity === "High" ? "red" : severity === "Moderate" ? "orange" : "yellow"}
+                variant="filled"
+                size="sm"
+              >
+                {severity}
+              </Badge>
+            </Table.Td>
+          </Table.Tr>
+        );
+      } else {
+        // For chainsaw and gunshots, show: Detected At, Detected By, Confidence
+        return (
+          <Table.Tr key={index}>
+            <Table.Td>{new Date(reading.timestamp).toLocaleString()}</Table.Td>
+            <Table.Td>{alert.node}</Table.Td>
+            <Table.Td>{formatConfidence(reading.confidence)}</Table.Td>
+          </Table.Tr>
+        );
+      }
     });
 
     modals.openConfirmModal({
@@ -137,7 +150,7 @@ export function ActiveAlerts({ activeAlerts, onResolve, API }) {
             </Text>
           )}
 
-          {/* Show initial readings for fire alerts */}
+          {/* Show initial alert details */}
           {alert.risk_type === "fire" && (
             <>
               {alert.temperature != null && (
@@ -158,11 +171,26 @@ export function ActiveAlerts({ activeAlerts, onResolve, API }) {
             </>
           )}
 
-          {/* Fire incident timeline */}
-          {alert.type === "Wildfire Risk" && incidentData.length > 0 && (
+          {/* Show initial details for chainsaw and gunshots */}
+          {(alert.risk_type === "chainsaw" || alert.risk_type === "gunshots") && incidentData.length > 0 && (
+            <Box mt="md" p="md" style={{ 
+              backgroundColor: 'var(--mantine-color-gray-1)',
+              borderRadius: '8px'
+            }}>
+              <Text mb="xs" fw="600" size="sm">Initial Alert Details:</Text>
+              <Text size="sm" c="dimmed">
+                First detected on {new Date(alert.timestamp).toLocaleString()}
+              </Text>
+            </Box>
+          )}
+
+          {/* Incident timeline for all risk types */}
+          {incidentData.length > 0 && (
             <Box mt="lg">
               <Text mb="md" fw="600">
-                Fire Incident Timeline ({incidentData.length} alerts):
+                {alert.risk_type === "fire" ? "Fire Incident Timeline" : 
+                 alert.risk_type === "chainsaw" ? "Illegal Logging Incident Timeline" :
+                 "Poaching Incident Timeline"} ({incidentData.length} alerts):
               </Text>
               <Box style={{ maxHeight: '250px', overflow: 'auto' }}>
                 <Table size="sm">
@@ -173,11 +201,21 @@ export function ActiveAlerts({ activeAlerts, onResolve, API }) {
                     zIndex: 1 
                   }}>
                     <Table.Tr>
-                      <Table.Th>Timestamp</Table.Th>
-                      <Table.Th>Temperature</Table.Th>
-                      <Table.Th>Humidity</Table.Th>
-                      <Table.Th>CO Level</Table.Th>
-                      <Table.Th>Severity</Table.Th>
+                      {alert.risk_type === "fire" ? (
+                        <>
+                          <Table.Th>Timestamp</Table.Th>
+                          <Table.Th>Temperature</Table.Th>
+                          <Table.Th>Humidity</Table.Th>
+                          <Table.Th>CO Level</Table.Th>
+                          <Table.Th>Severity</Table.Th>
+                        </>
+                      ) : (
+                        <>
+                          <Table.Th>Detected At</Table.Th>
+                          <Table.Th>Detected By</Table.Th>
+                          <Table.Th>Confidence Score</Table.Th>
+                        </>
+                      )}
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>{incidentRows}</Table.Tbody>

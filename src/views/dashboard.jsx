@@ -240,8 +240,8 @@ export default function Dashboard() {
       const risks = lastMessage.data?.risks || [];
       
       risks.forEach(risk => {
-        // Only add fire incidents if they're new
-        if (risk.risk_type === "fire" && !risk.isNewIncident) {
+        // Only add new incidents to the active alerts display
+        if (!risk.isNewIncident) {
           return;
         }
 
@@ -265,12 +265,17 @@ export default function Dashboard() {
       });
     }
 
-    // Risk resolved
-    if (lastMessage.event === "fire_resolved" || lastMessage.event === "fire_resolved_manual") {
-      const { nodeID, incidentTimestamp } = lastMessage.data;
+    // Risk resolved for any risk type
+    if (lastMessage.event === "fire_resolved" || 
+        lastMessage.event === "fire_resolved_manual" ||
+        lastMessage.event === "chainsaw_resolved" ||
+        lastMessage.event === "chainsaw_resolved_manual" ||
+        lastMessage.event === "gunshots_resolved" ||
+        lastMessage.event === "gunshots_resolved_manual") {
+      const { nodeID, incidentTimestamp, risk_type } = lastMessage.data;
       setActiveAlerts(prev =>
         prev.filter(a =>
-          !(a.nodeID === nodeID && a.incidentTimestamp === incidentTimestamp && a.risk_type === "fire")
+          !(a.nodeID === nodeID && a.incidentTimestamp === incidentTimestamp && a.risk_type === risk_type)
         )
       );
     }
@@ -281,23 +286,17 @@ export default function Dashboard() {
     }
   }, [lastMessage]);
 
-  // Handle resolving alerts - matches MUI version logic
+  // Handle resolving alerts - applies to all risk types
   const handleResolveAlert = async (alert) => {
     try {
-      // Remove from local state immediately for better UX
-      if (alert.risk_type === "fire") {
-        // Remove all fire alerts with same incident timestamp
-        setActiveAlerts(prev => 
-          prev.filter(a => 
-            !(a.nodeID === alert.nodeID && 
-              a.incidentTimestamp === alert.incidentTimestamp && 
-              a.risk_type === "fire")
-          )
-        );
-      } else {
-        // Remove single alert
-        setActiveAlerts(prev => prev.filter(a => a.id !== alert.id));
-      }
+      // Remove all alerts in the same incident from local state immediately for better UX
+      setActiveAlerts(prev => 
+        prev.filter(a => 
+          !(a.nodeID === alert.nodeID && 
+            a.incidentTimestamp === alert.incidentTimestamp && 
+            a.risk_type === alert.risk_type)
+        )
+      );
     } catch (err) {
       console.error("❌ Error resolving alert:", err);
     }
