@@ -101,8 +101,10 @@ npm run build
 
 ```bash
 cd server
-npm run dev
+npm start
 ```
+
+Note: For development with auto-reload, use `npm run dev` instead.
 
 ### Step 4: Access the Application
 
@@ -121,9 +123,9 @@ The backend now serves both the API and the frontend:
 
 **Windows Firewall:**
 ```powershell
-# Allow Node.js through firewall
-netsh advfirewall firewall add rule name="Node.js Server" dir=in action=allow protocol=TCP localport=3000
-netsh advfirewall firewall add rule name="Vite Dev Server" dir=in action=allow protocol=TCP localport=5173
+# Allow Node.js through firewall (restricted to local network only)
+netsh advfirewall firewall add rule name="Node.js Server" dir=in action=allow protocol=TCP localport=3000 localsubnet=yes
+netsh advfirewall firewall add rule name="Vite Dev Server" dir=in action=allow protocol=TCP localport=5173 localsubnet=yes
 ```
 
 **macOS Firewall:**

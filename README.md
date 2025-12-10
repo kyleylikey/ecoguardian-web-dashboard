@@ -74,6 +74,8 @@ Quick steps:
 3. Start the frontend
 4. Access from any device using: `http://YOUR_NETWORK_IP:5173`
 
+> **Note:** The `.env` file is tracked in version control for convenience. For sensitive deployments, consider adding `.env` to `.gitignore` and use `.env.example` as a template.
+
 ## Production Build
 
 Build the frontend for production:
@@ -84,7 +86,13 @@ npm run build
 
 The backend server will automatically serve the built files from the `dist` folder.
 
-Start the server:
+Start the server in production mode:
+```bash
+cd server
+npm start
+```
+
+For development with auto-reload:
 ```bash
 cd server
 npm run dev
