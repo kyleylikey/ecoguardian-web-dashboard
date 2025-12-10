@@ -66,7 +66,9 @@ Vite will start on port 5173:
 
 ## Network Access Setup
 
-📖 **For detailed instructions on accessing the dashboard from other devices on your network, see [NETWORK_SETUP.md](./NETWORK_SETUP.md)**
+🚀 **Want to access from other devices? See [QUICK_START_NETWORK.md](./QUICK_START_NETWORK.md) for a 5-step guide!**
+
+📖 **For detailed instructions and troubleshooting, see [NETWORK_SETUP.md](./NETWORK_SETUP.md)**
 
 Quick steps:
 1. Start the backend server (note the Network IP)
