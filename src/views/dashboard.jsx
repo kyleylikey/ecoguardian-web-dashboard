@@ -24,20 +24,8 @@ export default function Dashboard() {
     humidity: 'N/A',
     coLevel: 'N/A'
   });
-  const [nodeSignals, setNodeSignals] = useState({});
 
-  // Helper: Connection status from RSSI/SNR
-  const getConnectionStatus = (rssi, snr) => {
-    if (rssi === null || rssi === undefined) return 'None';
-    const rssiStrong = rssi > -80;
-    const rssiWeak = rssi < -100;
-    const snrStrong = snr > 10;
-    const snrWeak = snr < 5;
-    
-    if (rssiStrong && snrStrong) return 'Strong';
-    if (rssiWeak || snrWeak) return 'Weak';
-    return 'Moderate';
-  };
+
 
   // Helper: Map risk to alert
   const mapRisk = (r) => {
@@ -182,16 +170,6 @@ export default function Dashboard() {
     if (!lastMessage) return;
 
     const nodeID = lastMessage.data?.nodeID;
-    const rssi = lastMessage.data?.rssi;
-    const snr = lastMessage.data?.snr;
-
-    // Update signal data
-    if (nodeID && rssi !== undefined && snr !== undefined) {
-      setNodeSignals(prev => ({
-        ...prev,
-        [nodeID]: { rssi, snr, timestamp: lastMessage.timestamp }
-      }));
-    }
 
     // Update nodes last seen
     if (lastMessage.event === "new_reading" && nodeID) {
@@ -304,15 +282,11 @@ export default function Dashboard() {
 
   // Table rows for nodes
   const nodesRows = nodes.map((node, index) => {
-    const signal = nodeSignals[node.nodeID];
-    const connectionStatus = signal ? getConnectionStatus(signal.rssi, signal.snr) : 'None';
-    
     return (
       <Table.Tr key={`${node.nodeID}-${index}`}>
         <Table.Td>{node.name}</Table.Td>
         <Table.Td>{node.description || '—'}</Table.Td>
         <Table.Td>{node.status}</Table.Td>
-        <Table.Td>{connectionStatus}</Table.Td>
         <Table.Td>{node.last_seen ? new Date(node.last_seen).toLocaleTimeString() : 'Never'}</Table.Td>
       </Table.Tr>
     );
@@ -370,7 +344,6 @@ export default function Dashboard() {
                     <Table.Th>Name</Table.Th>
                     <Table.Th>Description</Table.Th>
                     <Table.Th>Status</Table.Th>
-                    <Table.Th>Connection</Table.Th>
                     <Table.Th>Last Seen</Table.Th>
                   </Table.Tr>
                 </Table.Thead>

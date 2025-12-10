@@ -2,40 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db/db");
 
-// ✅ Helper function to determine connection status
-function getConnectionStatus(rssi, snr) {
-  // No data = No Connection
-  if (rssi === null || rssi === undefined) {
-    return 'no_connection';
-  }
 
-  // RSSI thresholds (dBm):
-  // > -80: Strong
-  // -80 to -100: Moderate
-  // < -100: Weak
-
-  // SNR thresholds (dB):
-  // > 10: Strong
-  // 5 to 10: Moderate
-  // < 5: Weak
-
-  const rssiStrong = rssi > -80;
-  const rssiModerate = rssi >= -100 && rssi <= -80;
-  const rssiWeak = rssi < -100;
-
-  const snrStrong = snr > 10;
-  const snrModerate = snr >= 5 && snr <= 10;
-  const snrWeak = snr < 5;
-
-  // Strong connection: Good RSSI AND Good SNR
-  if (rssiStrong && snrStrong) return 'strong';
-  
-  // Weak connection: Bad RSSI OR Bad SNR
-  if (rssiWeak || snrWeak) return 'weak';
-  
-  // Moderate: Everything else
-  return 'moderate';
-}
 
 // ----------------------
 // GET All Sensor Nodes (with connection status)
@@ -175,7 +142,7 @@ router.patch("/:id", (req, res) => {
 // ----------------------
 router.delete("/:id", (req, res) => {
   const { id } = req.params;
-  const { connectionStatus, lastSeen } = req.query;
+  const { lastSeen } = req.query;
 
   // Validate deletion criteria
   if (lastSeen) {
@@ -183,30 +150,17 @@ router.delete("/:id", (req, res) => {
     const now = new Date();
     const diffMinutes = (now - lastSeenDate) / 1000 / 60;
 
-    // Can delete if:
-    // 1. Connection is weak AND inactive for 10+ minutes
-    // 2. No connection AND inactive for 10+ minutes
-    const canDelete = 
-      (connectionStatus === 'weak' && diffMinutes >= 10) ||
-      (connectionStatus === 'no_connection' && diffMinutes >= 10);
+    // Can delete if node has been inactive for 10+ minutes
+    const canDelete = diffMinutes >= 10;
 
     if (!canDelete) {
       return res.status(403).json({ 
         error: "Cannot delete node",
-        reason: connectionStatus === 'weak' || connectionStatus === 'no_connection'
-          ? "Node must be inactive for at least 10 minutes"
-          : "Node can only be deleted if connection is weak/none and inactive for 10+ minutes"
-      });
-    }
-  } else {
-    // If no last_seen, allow deletion only if no_connection
-    if (connectionStatus !== 'no_connection') {
-      return res.status(403).json({ 
-        error: "Cannot delete node",
-        reason: "Node can only be deleted if connection status is weak/none and inactive for 10+ minutes"
+        reason: "Node must be inactive for at least 10 minutes"
       });
     }
   }
+  // If no last_seen, allow deletion (node was never active)
 
   const query = `DELETE FROM SensorNodes WHERE nodeID = ?`;
 

@@ -80,8 +80,7 @@ const SensorNodes = () => {
   const [editMode, setEditMode] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
 
-  // ✅ Track signal data per node
-  const [nodeSignals, setNodeSignals] = useState({});
+
 
   // Form state
   const [formData, setFormData] = useState({
@@ -232,22 +231,12 @@ const SensorNodes = () => {
     if (!lastMessage) return;
 
     const nodeID = lastMessage.data?.nodeID;
-    const rssi = lastMessage.data?.rssi;
-    const snr = lastMessage.data?.snr;
 
     // Update last_seen when new reading comes in
     if (lastMessage.event === "new_reading") {
       const timestamp = lastMessage.timestamp;
 
       if (nodeID) {
-        // Update signal data
-        if (rssi !== undefined && snr !== undefined) {
-          setNodeSignals((prev) => ({
-            ...prev,
-            [nodeID]: { rssi, snr, timestamp },
-          }));
-        }
-
         setRows((prev) =>
           prev.map((node) =>
             node.nodeID === nodeID
@@ -263,13 +252,6 @@ const SensorNodes = () => {
       const timestamp = lastMessage.timestamp;
 
       if (nodeID) {
-        if (rssi !== undefined && snr !== undefined) {
-          setNodeSignals((prev) => ({
-            ...prev,
-            [nodeID]: { rssi, snr, timestamp },
-          }));
-        }
-
         setRows((prev) =>
           prev.map((node) =>
             node.nodeID === nodeID
@@ -355,58 +337,30 @@ const SensorNodes = () => {
     }
   };
 
-  // ✅ Helper: Compute connection status
-  const getConnectionStatus = (rssi, snr) => {
-    if (rssi === null || rssi === undefined) return "no_connection";
 
-    const rssiStrong = rssi > -80;
-    const rssiModerate = rssi >= -100 && rssi <= -80;
-    const rssiWeak = rssi < -100;
-
-    const snrStrong = snr > 10;
-    const snrModerate = snr >= 5 && snr <= 10;
-    const snrWeak = snr < 5;
-
-    if (rssiStrong && snrStrong) return "strong";
-    if (rssiWeak || snrWeak) return "weak";
-    return "moderate";
-  };
 
   // ✅ Helper: Check if node can be deleted
   const canDeleteNode = (node) => {
-    const signal = nodeSignals[node.nodeID];
-    const connectionStatus = signal
-      ? getConnectionStatus(signal.rssi, signal.snr)
-      : "no_connection";
-
     if (!node.last_seen) {
-      return connectionStatus === "no_connection";
+      return true; // Can delete if never seen
     }
 
     const lastSeenDate = new Date(node.last_seen);
     const now = new Date();
     const diffMinutes = (now - lastSeenDate) / 1000 / 60;
 
-    return (
-      (connectionStatus === "weak" && diffMinutes >= 10) ||
-      (connectionStatus === "no_connection" && diffMinutes >= 10)
-    );
+    // Can delete if node has been inactive for 10+ minutes
+    return diffMinutes >= 10;
   };
 
   // ✅ Handle delete
   const handleDelete = async (node) => {
-    const signal = nodeSignals[node.nodeID];
-    const connectionStatus = signal
-      ? getConnectionStatus(signal.rssi, signal.snr)
-      : "no_connection";
-
     if (!canDeleteNode(node)) {
       alert(
         `Cannot delete this sensor node.\n\n` +
           `Deletion is only allowed if:\n` +
-          `• Connection is weak AND node has been inactive for 10+ minutes, OR\n` +
-          `• No connection AND node has been inactive for 10+ minutes\n\n` +
-          `Current status: ${connectionStatus.toUpperCase()}\n` +
+          `• Node has never been seen, OR\n` +
+          `• Node has been inactive for 10+ minutes\n\n` +
           `Last seen: ${
             node.last_seen
               ? new Date(node.last_seen).toLocaleString()
@@ -422,7 +376,6 @@ const SensorNodes = () => {
 
     try {
       const params = new URLSearchParams({
-        connectionStatus,
         lastSeen: node.last_seen || "",
       });
 
@@ -584,53 +537,6 @@ const SensorNodes = () => {
         );
       },
       valueFormatter: (value) => value === "active" ? "Active" : "Inactive",
-    },
-    {
-      field: "connection",
-      headerName: "Connection",
-      width: 150,
-      headerAlign: 'center',
-      align: 'center',
-      renderCell: ({ row }) => {
-        const signal = nodeSignals[row.nodeID];
-
-        if (!signal) {
-          return (
-            <Text size="sm" c="dimmed" style={{ fontFamily: mantineTheme.fontFamily }}>
-              No Data
-            </Text>
-          );
-        }
-
-        const status = getConnectionStatus(signal.rssi, signal.snr);
-
-        const statusLabels = {
-          strong: "Strong",
-          moderate: "Moderate", 
-          weak: "Weak",
-          no_connection: "None",
-        };
-
-        return (
-          <Tooltip label={`RSSI: ${signal.rssi} dBm, SNR: ${signal.snr} dB`}>
-            <Text size="sm" style={{ fontFamily: mantineTheme.fontFamily }}>
-              {statusLabels[status]}
-            </Text>
-          </Tooltip>
-        );
-      },
-      valueFormatter: (value, row) => {
-        const signal = nodeSignals[row.nodeID];
-        if (!signal) return "No Data";
-        const status = getConnectionStatus(signal.rssi, signal.snr);
-        const statusLabels = {
-          strong: "Strong",
-          moderate: "Moderate",
-          weak: "Weak",
-          no_connection: "None",
-        };
-        return statusLabels[status];
-      },
     },
     {
       field: "last_seen",
