@@ -139,150 +139,104 @@ router.post("/", async (req, res) => {
         const { risk_type, risk_level, confidence } = risk;
 
         // ========================================
-        // FIRE RISK - Incident-based grouping
+        // ALL RISK TYPES - Incident-based grouping
         // ========================================
-        if (risk_type === "fire") {
-          const ongoingFire = await new Promise((resolve, reject) => {
-            db.get(
-              `SELECT * FROM Risks 
-               WHERE nodeID = ? 
-               AND risk_type = 'fire' 
-               AND resolved_at IS NULL
-               ORDER BY timestamp DESC
-               LIMIT 1`,
-              [nodeID],
-              (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
+        const ongoingIncident = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT * FROM Risks 
+             WHERE nodeID = ? 
+             AND risk_type = ? 
+             AND resolved_at IS NULL
+             ORDER BY timestamp DESC
+             LIMIT 1`,
+            [nodeID, risk_type],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        const isNewIncident = !ongoingIncident;
+        const incidentTimestamp = ongoingIncident ? ongoingIncident.timestamp : timestamp;
+
+        const riskID = await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO Risks (
+              nodeID, 
+              readingID,
+              timestamp, 
+              updated_at, 
+              risk_type, 
+              fire_risklvl, 
+              confidence, 
+              cooldown_counter,
+              is_incident_start
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+            [
+              nodeID,
+              readingID,
+              incidentTimestamp,
+              timestamp,
+              risk_type, 
+              risk_level, 
+              confidence,
+              isNewIncident ? 1 : 0
+            ],
+            function(err) {
+              if (err) reject(err);
+              else {
+                const emoji = risk_type === 'fire' ? '🔥' : risk_type === 'chainsaw' ? '🪚' : '🔫';
+                const msg = isNewIncident 
+                  ? `${emoji} NEW ${risk_type} incident started - riskID: ${this.lastID}` 
+                  : `${emoji} ${risk_type} alert added to ongoing incident - riskID: ${this.lastID}`;
+                console.log(msg);
+                resolve(this.lastID);
               }
-            );
-          });
+            }
+          );
+        });
 
-          const isNewIncident = !ongoingFire;
-          const incidentTimestamp = ongoingFire ? ongoingFire.timestamp : timestamp;
-
-          const riskID = await new Promise((resolve, reject) => {
+        if (ongoingIncident) {
+          await new Promise((resolve, reject) => {
             db.run(
-              `INSERT INTO Risks (
-                nodeID, 
-                readingID,
-                timestamp, 
-                updated_at, 
-                risk_type, 
-                fire_risklvl, 
-                confidence, 
-                cooldown_counter,
-                is_incident_start
-              )
-              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-              [
-                nodeID,
-                readingID,
-                incidentTimestamp,
-                timestamp,
-                risk_type, 
-                risk_level, 
-                confidence,
-                isNewIncident ? 1 : 0
-              ],
-              function(err) {
+              `UPDATE Risks 
+               SET cooldown_counter = 0,
+                   updated_at = ?
+               WHERE riskID = ?`,
+              [timestamp, ongoingIncident.riskID],
+              (err) => {
                 if (err) reject(err);
                 else {
-                  const msg = isNewIncident 
-                    ? `🔥 NEW fire incident started - riskID: ${this.lastID}` 
-                    : `🔥 Fire alert added to ongoing incident - riskID: ${this.lastID}`;
-                  console.log(msg);
-                  resolve(this.lastID);
+                  console.log(`   ↳ Reset cooldown for incident start riskID: ${ongoingIncident.riskID}`);
+                  resolve();
                 }
               }
             );
-          });
-
-          if (ongoingFire) {
-            await new Promise((resolve, reject) => {
-              db.run(
-                `UPDATE Risks 
-                 SET cooldown_counter = 0,
-                     updated_at = ?
-                 WHERE riskID = ?`,
-                [timestamp, ongoingFire.riskID],
-                (err) => {
-                  if (err) reject(err);
-                  else {
-                    console.log(`   ↳ Reset cooldown for incident start riskID: ${ongoingFire.riskID}`);
-                    resolve();
-                  }
-                }
-              );
-            });
-          }
-
-          if (data?.gps && riskID) {
-            db.run(
-              `INSERT INTO GPSData (riskID, latitude, longitude, altitude, fix)
-               VALUES (?, ?, ?, ?, ?)`,
-              [riskID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
-              (err) => {
-                if (err) console.error("❌ Error saving GPS data for risk:", err);
-              }
-            );
-          }
-
-          processedRisks.push({
-            riskID,
-            risk_type,
-            risk_level,
-            confidence,
-            isNewIncident,
-            incidentTimestamp,
-            readingID
           });
         }
-        // ========================================
-        // CHAINSAW / GUNSHOTS - One-off events
-        // ========================================
-        else if (risk_type === "chainsaw" || risk_type === "gunshots") {
-          const riskID = await new Promise((resolve, reject) => {
-            db.run(
-              `INSERT INTO Risks (
-                nodeID,
-                readingID,
-                timestamp, 
-                updated_at, 
-                risk_type, 
-                confidence,
-                is_incident_start
-              )
-              VALUES (?, ?, ?, ?, ?, ?, 1)`,
-              [nodeID, readingID, timestamp, timestamp, risk_type, confidence],
-              function(err) {
-                if (err) reject(err);
-                else {
-                  console.log(`✅ ${risk_type} alert logged - riskID: ${this.lastID}`);
-                  resolve(this.lastID);
-                }
-              }
-            );
-          });
 
-          if (data?.gps && riskID) {
-            db.run(
-              `INSERT INTO GPSData (riskID, latitude, longitude, altitude, fix)
-               VALUES (?, ?, ?, ?, ?)`,
-              [riskID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
-              (err) => {
-                if (err) console.error("❌ Error saving GPS data for risk:", err);
-              }
-            );
-          }
-
-          processedRisks.push({
-            riskID,
-            risk_type,
-            confidence,
-            readingID
-          });
+        if (data?.gps && riskID) {
+          db.run(
+            `INSERT INTO GPSData (riskID, latitude, longitude, altitude, fix)
+             VALUES (?, ?, ?, ?, ?)`,
+            [riskID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
+            (err) => {
+              if (err) console.error("❌ Error saving GPS data for risk:", err);
+            }
+          );
         }
+
+        processedRisks.push({
+          riskID,
+          risk_type,
+          risk_level,
+          confidence,
+          isNewIncident,
+          incidentTimestamp,
+          readingID
+        });
       }
 
       // Broadcast via WebSocket
@@ -310,27 +264,26 @@ router.post("/", async (req, res) => {
       console.log(`📤 Broadcasted ${processedRisks.length} risk(s)`);
     }
     // ========================================
-    // HANDLE READINGS (fire cooldown)
+    // HANDLE READINGS (cooldown for all risk types)
     // ========================================
     else if (type === "reading") {
-      const incidentStart = await new Promise((resolve, reject) => {
-        db.get(
+      // Check for all unresolved incidents (all risk types)
+      const activeIncidents = await new Promise((resolve, reject) => {
+        db.all(
           `SELECT * FROM Risks 
            WHERE nodeID = ? 
-           AND risk_type = 'fire' 
            AND resolved_at IS NULL
            AND is_incident_start = 1
-           ORDER BY timestamp DESC
-           LIMIT 1`,
+           ORDER BY timestamp DESC`,
           [nodeID],
-          (err, row) => {
+          (err, rows) => {
             if (err) reject(err);
-            else resolve(row);
+            else resolve(rows || []);
           }
         );
       });
 
-      if (incidentStart) {
+      for (const incidentStart of activeIncidents) {
         const newCounter = incidentStart.cooldown_counter + 1;
         
         if (newCounter >= 5) {
@@ -339,22 +292,24 @@ router.post("/", async (req, res) => {
               `UPDATE Risks 
                SET resolved_at = ?
                WHERE nodeID = ?
-               AND risk_type = 'fire'
+               AND risk_type = ?
                AND timestamp = ?
                AND resolved_at IS NULL`,
-              [timestamp, nodeID, incidentStart.timestamp],
+              [timestamp, nodeID, incidentStart.risk_type, incidentStart.timestamp],
               function(err) {
                 if (err) reject(err);
                 else {
-                  console.log(`✅ Fire incident RESOLVED (${this.changes} alerts closed)`);
+                  const emoji = incidentStart.risk_type === 'fire' ? '🔥' : incidentStart.risk_type === 'chainsaw' ? '🪚' : '🔫';
+                  console.log(`✅ ${incidentStart.risk_type} incident RESOLVED (${this.changes} alerts closed)`);
                   
                   wsClients.forEach((client) => {
                     if (client.readyState === 1) {
                       client.send(JSON.stringify({
-                        event: "fire_resolved",
+                        event: `${incidentStart.risk_type}_resolved`,
                         timestamp,
                         data: { 
                           nodeID,
+                          risk_type: incidentStart.risk_type,
                           incidentTimestamp: incidentStart.timestamp,
                           alertsResolved: this.changes
                         }
@@ -378,15 +333,17 @@ router.post("/", async (req, res) => {
               (err) => {
                 if (err) reject(err);
                 else {
-                  console.log(`🔥 Fire incident cooldown: ${newCounter}/5`);
+                  const emoji = incidentStart.risk_type === 'fire' ? '🔥' : incidentStart.risk_type === 'chainsaw' ? '🪚' : '🔫';
+                  console.log(`${emoji} ${incidentStart.risk_type} incident cooldown: ${newCounter}/5`);
                   
                   wsClients.forEach((client) => {
                     if (client.readyState === 1) {
                       client.send(JSON.stringify({
-                        event: "fire_cooldown_update",
+                        event: `${incidentStart.risk_type}_cooldown_update`,
                         timestamp,
                         data: { 
-                          nodeID, 
+                          nodeID,
+                          risk_type: incidentStart.risk_type,
                           cooldown_counter: newCounter,
                           incidentTimestamp: incidentStart.timestamp
                         }
