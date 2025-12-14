@@ -15,6 +15,11 @@ router.post("/", async (req, res) => {
     const { type, nodeID, data } = payload;
     const timestamp = req.body.received_at || new Date().toISOString();
 
+    // ✅ Support both codec structures:
+    // V1 (nested): { type, nodeID, data: { temp_humid, gas, gps } }
+    // V2 (flat): { type, nodeID, temp_humid, gas, gps }
+    const sensorData = data || payload; // Use 'data' if it exists, otherwise use payload directly
+
     // ✅ Universal RSSI/SNR extractor
     let rssi = null;
     let snr = null;
@@ -234,11 +239,11 @@ router.post("/", async (req, res) => {
           });
         }
 
-        if (data?.gps && riskID) {
+        if (sensorData?.gps && riskID) {
           db.run(
             `INSERT INTO GPSData (riskID, latitude, longitude, altitude, fix)
              VALUES (?, ?, ?, ?, ?)`,
-            [riskID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
+            [riskID, sensorData.gps.latitude, sensorData.gps.longitude, sensorData.gps.altitude, sensorData.gps.fix ? 1 : 0],
             (err) => {
               if (err) console.error("❌ Error saving GPS data for risk:", err);
             }
@@ -263,10 +268,10 @@ router.post("/", async (req, res) => {
         data: {
           nodeID,
           risks: processedRisks,
-          temperature: data?.temp_humid?.temperature,
-          humidity: data?.temp_humid?.humidity,
-          co_level: data?.gas?.co_ppm,
-          location: data?.gps,
+          temperature: sensorData?.temp_humid?.temperature,
+          humidity: sensorData?.temp_humid?.humidity,
+          co_level: sensorData?.gas?.co_ppm,
+          location: sensorData?.gps,
           rssi, // ✅ Include signal data
           snr
         }
@@ -381,7 +386,7 @@ router.post("/", async (req, res) => {
         db.run(
           `INSERT INTO Readings (nodeID, timestamp, temperature, humidity, co_level)
            VALUES (?, ?, ?, ?, ?)`,
-          [nodeID, timestamp, data?.temp_humid?.temperature, data?.temp_humid?.humidity, data?.gas?.co_ppm],
+          [nodeID, timestamp, sensorData?.temp_humid?.temperature, sensorData?.temp_humid?.humidity, sensorData?.gas?.co_ppm],
           function(err) {
             if (err) reject(err);
             else {
@@ -392,11 +397,11 @@ router.post("/", async (req, res) => {
         );
       });
 
-      if (data?.gps && readingID) {
+      if (sensorData?.gps && readingID) {
         db.run(
           `INSERT INTO GPSData (readingID, latitude, longitude, altitude, fix)
            VALUES (?, ?, ?, ?, ?)`,
-          [readingID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
+          [readingID, sensorData.gps.latitude, sensorData.gps.longitude, sensorData.gps.altitude, sensorData.gps.fix ? 1 : 0],
           (err) => {
             if (err) console.error("❌ Error saving GPS data:", err);
           }
@@ -412,10 +417,10 @@ router.post("/", async (req, res) => {
             data: {
               readingID,
               nodeID,
-              temperature: data?.temp_humid?.temperature,
-              humidity: data?.temp_humid?.humidity,
-              co_level: data?.gas?.co_ppm,
-              location: data?.gps,
+              temperature: sensorData?.temp_humid?.temperature,
+              humidity: sensorData?.temp_humid?.humidity,
+              co_level: sensorData?.gas?.co_ppm,
+              location: sensorData?.gps,
               rssi, // ✅ Include signal data
               snr
             }
