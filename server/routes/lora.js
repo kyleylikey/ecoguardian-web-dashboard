@@ -138,6 +138,23 @@ router.post("/", async (req, res) => {
       for (const risk of risks) {
         const { risk_type, risk_level, confidence } = risk;
 
+        // Map integer risk_level to TEXT for database compatibility
+        // Database expects: 'low', 'medium', 'high'
+        // Python/Codec may send: 1, 2, 3 OR 'low', 'medium', 'high'
+        let fire_risklvl = null;
+        if (risk_level !== null && risk_level !== undefined) {
+          if (typeof risk_level === 'number') {
+            // Map integer to TEXT
+            const levelMap = { 1: 'low', 2: 'medium', 3: 'high' };
+            fire_risklvl = levelMap[risk_level] || null;
+          } else if (typeof risk_level === 'string') {
+            // Already TEXT, validate it
+            if (['low', 'medium', 'high'].includes(risk_level)) {
+              fire_risklvl = risk_level;
+            }
+          }
+        }
+
         // ========================================
         // ALL RISK TYPES - Incident-based grouping
         // ========================================
@@ -180,7 +197,7 @@ router.post("/", async (req, res) => {
               incidentTimestamp,
               timestamp,
               risk_type, 
-              risk_level, 
+              fire_risklvl,  // Use mapped TEXT value instead of risk_level
               confidence,
               isNewIncident ? 1 : 0
             ],
