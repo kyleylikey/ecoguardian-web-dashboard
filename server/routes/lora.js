@@ -2,6 +2,11 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db/db");
 
+// Map integer risk_level to TEXT for database compatibility
+// Database expects: 'low', 'medium', 'high'
+const RISK_LEVEL_MAP = { 1: 'low', 2: 'medium', 3: 'high' };
+const VALID_RISK_LEVELS = ['low', 'medium', 'high'];
+
 router.post("/", async (req, res) => {
   try {
     const payload = req.body?.object;
@@ -138,20 +143,15 @@ router.post("/", async (req, res) => {
       for (const risk of risks) {
         const { risk_type, risk_level, confidence } = risk;
 
-        // Map integer risk_level to TEXT for database compatibility
-        // Database expects: 'low', 'medium', 'high'
-        // Python/Codec may send: 1, 2, 3 OR 'low', 'medium', 'high'
+        // Map risk_level to database-compatible TEXT value
         let fire_risklvl = null;
         if (risk_level !== null && risk_level !== undefined) {
           if (typeof risk_level === 'number') {
-            // Map integer to TEXT
-            const levelMap = { 1: 'low', 2: 'medium', 3: 'high' };
-            fire_risklvl = levelMap[risk_level] || null;
+            // Map integer to TEXT using constant
+            fire_risklvl = RISK_LEVEL_MAP[risk_level] || null;
           } else if (typeof risk_level === 'string') {
-            // Already TEXT, validate it
-            if (['low', 'medium', 'high'].includes(risk_level)) {
-              fire_risklvl = risk_level;
-            }
+            // Validate TEXT value
+            fire_risklvl = VALID_RISK_LEVELS.includes(risk_level) ? risk_level : null;
           }
         }
 
