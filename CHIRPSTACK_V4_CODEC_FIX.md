@@ -2,13 +2,13 @@
 
 ## The Issue
 
-ChirpStack v4 has unexpected behavior with nested codec return values. When a codec returns a structured object like:
+ChirpStack v4 has specific requirements for codec return values. The codec MUST return an object with a `data` property. When a codec returns:
 
 ```javascript
 return {
-  type: "reading",
-  nodeID: 2,
   data: {
+    type: "reading",
+    nodeID: 2,
     temp_humid: { temperature: 26.1, humidity: 61.8 },
     gas: { co_ppm: 3.0 },
     gps: { latitude: null, longitude: null, altitude: null, fix: false }
@@ -20,44 +20,48 @@ ChirpStack v4 **unwraps** the `data` object and places its contents at the root 
 
 ```json
 "object": {
+  "type": "reading",
+  "nodeID": 2,
   "temp_humid": { "temperature": 26.1, "humidity": 61.8 },
   "gas": { "co_ppm": 3.0 },
   "gps": { "latitude": null, "longitude": null, "altitude": null, "fix": false }
 }
 ```
 
-**Notice**: `type` and `nodeID` are **missing**! This causes the server to receive `undefined` for these critical fields.
+✅ **All fields preserved!**
 
 ## The Root Cause
 
 ChirpStack v4's codec execution behavior:
-1. Takes the codec's return value
-2. If a `data` property exists, **unwraps it** and promotes its contents to root level
-3. **Discards** sibling properties like `type` and `nodeID`
-4. Places only the unwrapped contents in `req.body.object`
+1. **Requires** the codec to return an object with a `data` property
+2. Takes the contents of the `data` property
+3. **Unwraps** it and places the contents in `req.body.object`
+4. If no `data` property exists, returns error: "decodeUplink did not return 'data'"
 
 ## The Solution
 
 ### V2 Codec (CHIRPSTACK_CODEC_CORRECTED_V2.js)
 
-Return **everything flat** at the root level without a nested `data` property:
+Return everything inside a `data` property wrapper:
 
 ```javascript
 return {
-  type: "reading",          // ✅ At root level
-  nodeID: 2,                // ✅ At root level
-  temp_humid: {             // ✅ At root level (NOT under 'data')
-    temperature: 26.1,
-    humidity: 61.8
-  },
-  gas: {                    // ✅ At root level
-    co_ppm: 3.0
-  },
-  gps: {                    // ✅ At root level
-    latitude: null,
-    longitude: null,
-    altitude: null,
-    fix: false
+  data: {
+    type: "reading",          // ✅ Inside data wrapper
+    nodeID: 2,                // ✅ Inside data wrapper
+    temp_humid: {             // ✅ Inside data wrapper
+      temperature: 26.1,
+      humidity: 61.8
+    },
+    gas: {                    // ✅ Inside data wrapper
+      co_ppm: 3.0
+    },
+    gps: {                    // ✅ Inside data wrapper
+      latitude: null,
+      longitude: null,
+      altitude: null,
+      fix: false
+    }
   }
 };
 ```
@@ -74,7 +78,7 @@ This results in ChirpStack's `object` field containing:
 }
 ```
 
-✅ **All fields preserved!**
+✅ **All fields preserved after unwrapping!**
 
 ### Server Update
 

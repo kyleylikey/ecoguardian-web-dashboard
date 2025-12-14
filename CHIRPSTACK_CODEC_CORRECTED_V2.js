@@ -1,13 +1,14 @@
 // ChirpStack v4 decoder for JSON payload - VERSION 2
 // ====================================================
-// FLAT STRUCTURE VERSION - Compatible with ChirpStack v4 behavior
+// CORRECTED VERSION - Compatible with ChirpStack v4 requirements
 //
-// ChirpStack v4 behavior: When a codec returns { type, nodeID, data: {...} },
-// the 'data' object gets unwrapped and its contents are placed at the root.
-// This means { type, nodeID, data: { temp_humid, gas, gps } }
-// becomes { temp_humid, gas, gps } in req.body.object (losing type and nodeID)
+// ChirpStack v4 behavior:
+// 1. Codec MUST return an object with a 'data' property
+// 2. ChirpStack unwraps the 'data' object and places its contents in req.body.object
+// 3. Example: return { data: { type, nodeID, temp_humid, gas, gps } }
+//    becomes { type, nodeID, temp_humid, gas, gps } in req.body.object
 //
-// SOLUTION: Return everything flat at the root level, including type and nodeID
+// SOLUTION: Put ALL fields (type, nodeID, sensors) inside the 'data' wrapper
 //
 // Python sensor script sends JSON like:
 // - Reading: {"type": "reading", "nodeID": 2, "temp": 25.5, "humidity": 60, ...}
@@ -30,23 +31,25 @@ function decodeUplink(input) {
     // HANDLE SENSOR READINGS
     // ----------------------------
     if (jsonData.type === "reading") {
-      // Return FLAT structure with all fields at root level
-      // ChirpStack will place these directly in req.body.object
+      // Return structure wrapped in 'data' property as required by ChirpStack v4
+      // ChirpStack will place the contents of 'data' in req.body.object
       return {
-        type: jsonData.type,          // ✅ At root level
-        nodeID: jsonData.nodeID,      // ✅ At root level
-        temp_humid: {                 // ✅ At root level (NOT nested under 'data')
-          temperature: jsonData.temp,
-          humidity: jsonData.humidity
-        },
-        gas: {                        // ✅ At root level
-          co_ppm: jsonData.co_ppm
-        },
-        gps: {                        // ✅ At root level
-          latitude: jsonData.latitude,
-          longitude: jsonData.longitude,
-          altitude: jsonData.altitude,
-          fix: jsonData.gps_fix
+        data: {
+          type: jsonData.type,          // ✅ At root level of data
+          nodeID: jsonData.nodeID,      // ✅ At root level of data
+          temp_humid: {                 // ✅ At root level of data
+            temperature: jsonData.temp,
+            humidity: jsonData.humidity
+          },
+          gas: {                        // ✅ At root level of data
+            co_ppm: jsonData.co_ppm
+          },
+          gps: {                        // ✅ At root level of data
+            latitude: jsonData.latitude,
+            longitude: jsonData.longitude,
+            altitude: jsonData.altitude,
+            fix: jsonData.gps_fix
+          }
         }
       };
     }
@@ -55,13 +58,15 @@ function decodeUplink(input) {
     // HANDLE ALERT / RISK
     // ----------------------------
     else if (jsonData.type === "alert") {
-      // Return flat structure for alerts
+      // Return structure wrapped in 'data' property
       return {
-        type: "alert",                                                        // ✅ At root level
-        nodeID: jsonData.nodeID,                                              // ✅ At root level
-        risk_type: jsonData.risk_type,                                        // ✅ At root level
-        risk_level: jsonData.risk_level !== undefined ? jsonData.risk_level : null,    // ✅ At root level (nullable)
-        confidence: jsonData.confidence !== undefined ? jsonData.confidence : null     // ✅ At root level (nullable)
+        data: {
+          type: "alert",                                                        // ✅ At root level of data
+          nodeID: jsonData.nodeID,                                              // ✅ At root level of data
+          risk_type: jsonData.risk_type,                                        // ✅ At root level of data
+          risk_level: jsonData.risk_level !== undefined ? jsonData.risk_level : null,    // ✅ At root level of data (nullable)
+          confidence: jsonData.confidence !== undefined ? jsonData.confidence : null     // ✅ At root level of data (nullable)
+        }
       };
     }
 
@@ -87,16 +92,18 @@ function decodeUplink(input) {
 
 // Example 1: Reading Payload
 // Input from Python: {"type":"reading","nodeID":2,"temp":25.5,"humidity":60,"co_ppm":5.2,"latitude":14.5995,"longitude":120.9842,"altitude":50,"gps_fix":true}
-// Decoder Output (flat structure):
+// Decoder Output (wrapped in 'data'):
 // {
-//   type: "reading",
-//   nodeID: 2,
-//   temp_humid: { temperature: 25.5, humidity: 60 },
-//   gas: { co_ppm: 5.2 },
-//   gps: { latitude: 14.5995, longitude: 120.9842, altitude: 50, fix: true }
+//   data: {
+//     type: "reading",
+//     nodeID: 2,
+//     temp_humid: { temperature: 25.5, humidity: 60 },
+//     gas: { co_ppm: 5.2 },
+//     gps: { latitude: 14.5995, longitude: 120.9842, altitude: 50, fix: true }
+//   }
 // }
 //
-// This will appear in ChirpStack's object field AS-IS:
+// This will appear in ChirpStack's object field (data contents unwrapped):
 // "object": {
 //   "type": "reading",
 //   "nodeID": 2,
@@ -109,20 +116,24 @@ function decodeUplink(input) {
 // Input from Python: {"type":"alert","nodeID":2,"risk_type":"chainsaw","risk_level":1,"confidence":85.5}
 // Decoder Output:
 // {
-//   type: "alert",
-//   nodeID: 2,
-//   risk_type: "chainsaw",
-//   risk_level: 1,
-//   confidence: 85.5
+//   data: {
+//     type: "alert",
+//     nodeID: 2,
+//     risk_type: "chainsaw",
+//     risk_level: 1,
+//     confidence: 85.5
+//   }
 // }
 
 // Example 3: Alert Payload (Fire)
 // Input from Python: {"type":"alert","nodeID":2,"risk_type":"fire","risk_level":3,"confidence":null}
 // Decoder Output:
 // {
-//   type: "alert",
-//   nodeID: 2,
-//   risk_type: "fire",
-//   risk_level: 3,
-//   confidence: null
+//   data: {
+//     type: "alert",
+//     nodeID: 2,
+//     risk_type: "fire",
+//     risk_level: 3,
+//     confidence: null
+//   }
 // }
