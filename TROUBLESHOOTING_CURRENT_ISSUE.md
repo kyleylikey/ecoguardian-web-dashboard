@@ -149,7 +149,7 @@ function decodeUplink(input) {
 ### 2. Deploy Corrected Codec
 
 1. Open `CHIRPSTACK_CODEC_CORRECTED.js` from this repository
-2. **Copy the ENTIRE function** (all ~115 lines)
+2. **Copy the ENTIRE function** (all ~120 lines)
 3. In ChirpStack: **Replace the entire decoder function**
 4. Click **Save**
 

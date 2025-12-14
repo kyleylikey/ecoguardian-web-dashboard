@@ -186,7 +186,7 @@ This decodes to:
    - Copy (Ctrl+C)
    - In ChirpStack: Select ALL in editor
    - Paste (Ctrl+V)
-   - **Verify all ~115 lines are there**
+   - **Verify all ~120 lines are there**
 
 3. **Save**
    - Click Save/Update button
@@ -234,7 +234,7 @@ This decodes to:
 **Problem:** Codec not deployed correctly or saved
 
 **Solutions:**
-1. Verify you copied the ENTIRE file (all 115 lines)
+1. Verify you copied the ENTIRE file (all 120 lines)
 2. Check for JavaScript syntax errors in ChirpStack
 3. Make sure you clicked Save
 4. Refresh ChirpStack page and check if codec is still there

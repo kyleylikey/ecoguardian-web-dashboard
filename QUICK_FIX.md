@@ -90,7 +90,7 @@ After deploying corrected codec:
 ## Still Not Working?
 
 1. **Check which codec tab**: Make sure you're editing the **Decoder/Uplink**, not Encoder
-2. **Copy complete file**: Make sure you copied ALL 115 lines from `CHIRPSTACK_CODEC_CORRECTED.js`
+2. **Copy complete file**: Make sure you copied ALL 120 lines from `CHIRPSTACK_CODEC_CORRECTED.js`
 3. **Save and refresh**: After saving, refresh the ChirpStack page and verify code is still there
 4. **Restart ChirpStack**: If cached, restart the ChirpStack application
 
