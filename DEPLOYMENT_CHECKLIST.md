@@ -272,10 +272,23 @@ If issues occur after deployment:
 
 **Test:**
 ```bash
-# Test server directly
+# Test server directly with a reading packet
 curl -X POST http://localhost:3000/api/lora \
   -H "Content-Type: application/json" \
-  -d '{"received_at":"2025-12-14T15:30:00Z","object":{"type":"reading","nodeID":2,"data":{"temp_humid":{"temperature":25.5,"humidity":60},"gas":{"co_ppm":5},"gps":{"latitude":14.5995,"longitude":120.9842,"altitude":50,"fix":true}}}}'
+  -d @- << 'EOF'
+{
+  "received_at": "2025-12-14T15:30:00Z",
+  "object": {
+    "type": "reading",
+    "nodeID": 2,
+    "data": {
+      "temp_humid": {"temperature": 25.5, "humidity": 60},
+      "gas": {"co_ppm": 5},
+      "gps": {"latitude": 14.5995, "longitude": 120.9842, "altitude": 50, "fix": true}
+    }
+  }
+}
+EOF
 ```
 
 ### Issue: Partial Data Only
@@ -302,10 +315,21 @@ SELECT COUNT(*) as null_co FROM Readings WHERE co_level IS NULL;
 
 **Test:**
 ```bash
-# Send test alert
+# Send test chainsaw alert
 curl -X POST http://localhost:3000/api/lora \
   -H "Content-Type: application/json" \
-  -d '{"received_at":"2025-12-14T15:30:00Z","object":{"type":"alert","nodeID":2,"risk_type":"chainsaw","risk_level":1,"confidence":87.3}}'
+  -d @- << 'EOF'
+{
+  "received_at": "2025-12-14T15:30:00Z",
+  "object": {
+    "type": "alert",
+    "nodeID": 2,
+    "risk_type": "chainsaw",
+    "risk_level": 1,
+    "confidence": 87.3
+  }
+}
+EOF
 ```
 
 ### Issue: WebSocket Not Updating

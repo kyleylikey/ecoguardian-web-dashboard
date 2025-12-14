@@ -202,8 +202,8 @@ curl -X POST http://localhost:3000/api/lora \
 }
 ```
 
-**Note:** Even though temp=35°C and co_ppm=8.5 are high, the Python script only sends an alert when:
-- temp > 30 AND humidity < 60 AND co_ppm > 10
+**Note:** Even though temp=35°C and co_ppm=8.5 are high, the Python script only sends a fire alert when ALL conditions are met:
+- temp > 30°C (Celsius) AND humidity < 60% AND co_ppm > 10 ppm
 
 So this should be processed as a regular reading, not an alert.
 

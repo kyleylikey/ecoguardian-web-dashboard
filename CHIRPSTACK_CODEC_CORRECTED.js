@@ -56,11 +56,11 @@ function decodeUplink(input) {
       // Return flat structure for alerts
       // Server checks: payload.risk_type, payload.risk_level, payload.confidence
       return {
-        type: "alert",                              // ✅ At root level
-        nodeID: jsonData.nodeID,                    // ✅ At root level
-        risk_type: jsonData.risk_type,              // ✅ At root level
-        risk_level: jsonData.risk_level ?? null,    // ✅ At root level (nullable)
-        confidence: jsonData.confidence ?? null     // ✅ At root level (nullable)
+        type: "alert",                                                        // ✅ At root level
+        nodeID: jsonData.nodeID,                                              // ✅ At root level
+        risk_type: jsonData.risk_type,                                        // ✅ At root level
+        risk_level: jsonData.risk_level !== undefined ? jsonData.risk_level : null,    // ✅ At root level (nullable)
+        confidence: jsonData.confidence !== undefined ? jsonData.confidence : null     // ✅ At root level (nullable)
       };
     }
 
