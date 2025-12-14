@@ -139,10 +139,10 @@ export default function Dashboard() {
         // ✅ Set nodes
         setNodes(nodesData?.nodes || []);
 
-        // ✅ Set active alerts (filter fire incidents)
+        // ✅ Set active alerts (filter all risk types to show only incident starts)
         const allActive = risksData?.risks || [];
         const filtered = allActive.filter(r => 
-          r.risk_type !== "fire" || r.is_incident_start === 1
+          r.is_incident_start === 1
         );
         setActiveAlerts(filtered.map(mapRisk));
 
