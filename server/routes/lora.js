@@ -2,6 +2,11 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db/db");
 
+// Map integer risk_level to TEXT for database compatibility
+// Database expects: 'low', 'medium', 'high'
+const RISK_LEVEL_MAP = { 1: 'low', 2: 'medium', 3: 'high' };
+const VALID_RISK_LEVELS = ['low', 'medium', 'high'];
+
 router.post("/", async (req, res) => {
   try {
     const payload = req.body?.object;
@@ -9,6 +14,11 @@ router.post("/", async (req, res) => {
 
     const { type, nodeID, data } = payload;
     const timestamp = req.body.received_at || new Date().toISOString();
+
+    // ✅ Support both codec structures:
+    // V1 (nested): { type, nodeID, data: { temp_humid, gas, gps } }
+    // V2 (flat): { type, nodeID, temp_humid, gas, gps }
+    const sensorData = data || payload; // Use 'data' if it exists, otherwise use payload directly
 
     // ✅ Universal RSSI/SNR extractor
     let rssi = null;
@@ -138,6 +148,18 @@ router.post("/", async (req, res) => {
       for (const risk of risks) {
         const { risk_type, risk_level, confidence } = risk;
 
+        // Map risk_level to database-compatible TEXT value
+        let fire_risklvl = null;
+        if (risk_level !== null && risk_level !== undefined) {
+          if (typeof risk_level === 'number') {
+            // Map integer to TEXT using constant
+            fire_risklvl = RISK_LEVEL_MAP[risk_level] || null;
+          } else if (typeof risk_level === 'string') {
+            // Validate TEXT value
+            fire_risklvl = VALID_RISK_LEVELS.includes(risk_level) ? risk_level : null;
+          }
+        }
+
         // ========================================
         // ALL RISK TYPES - Incident-based grouping
         // ========================================
@@ -180,7 +202,7 @@ router.post("/", async (req, res) => {
               incidentTimestamp,
               timestamp,
               risk_type, 
-              risk_level, 
+              fire_risklvl,  // Use mapped TEXT value instead of risk_level
               confidence,
               isNewIncident ? 1 : 0
             ],
@@ -198,30 +220,11 @@ router.post("/", async (req, res) => {
           );
         });
 
-        if (ongoingIncident) {
-          await new Promise((resolve, reject) => {
-            db.run(
-              `UPDATE Risks 
-               SET cooldown_counter = 0,
-                   updated_at = ?
-               WHERE riskID = ?`,
-              [timestamp, ongoingIncident.riskID],
-              (err) => {
-                if (err) reject(err);
-                else {
-                  console.log(`   ↳ Reset cooldown for incident start riskID: ${ongoingIncident.riskID}`);
-                  resolve();
-                }
-              }
-            );
-          });
-        }
-
-        if (data?.gps && riskID) {
+        if (sensorData?.gps && riskID) {
           db.run(
             `INSERT INTO GPSData (riskID, latitude, longitude, altitude, fix)
              VALUES (?, ?, ?, ?, ?)`,
-            [riskID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
+            [riskID, sensorData.gps.latitude, sensorData.gps.longitude, sensorData.gps.altitude, sensorData.gps.fix ? 1 : 0],
             (err) => {
               if (err) console.error("❌ Error saving GPS data for risk:", err);
             }
@@ -246,10 +249,10 @@ router.post("/", async (req, res) => {
         data: {
           nodeID,
           risks: processedRisks,
-          temperature: data?.temp_humid?.temperature,
-          humidity: data?.temp_humid?.humidity,
-          co_level: data?.gas?.co_ppm,
-          location: data?.gps,
+          temperature: sensorData?.temp_humid?.temperature,
+          humidity: sensorData?.temp_humid?.humidity,
+          co_level: sensorData?.gas?.co_ppm,
+          location: sensorData?.gps,
           rssi, // ✅ Include signal data
           snr
         }
@@ -264,107 +267,16 @@ router.post("/", async (req, res) => {
       console.log(`📤 Broadcasted ${processedRisks.length} risk(s)`);
     }
     // ========================================
-    // HANDLE READINGS (cooldown for all risk types)
+    // HANDLE READINGS
     // ========================================
     else if (type === "reading") {
-      // Check for all unresolved incidents (all risk types)
-      const activeIncidents = await new Promise((resolve, reject) => {
-        db.all(
-          `SELECT * FROM Risks 
-           WHERE nodeID = ? 
-           AND resolved_at IS NULL
-           AND is_incident_start = 1
-           ORDER BY timestamp DESC`,
-          [nodeID],
-          (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows || []);
-          }
-        );
-      });
-
-      for (const incidentStart of activeIncidents) {
-        const newCounter = incidentStart.cooldown_counter + 1;
-        
-        if (newCounter >= 5) {
-          await new Promise((resolve, reject) => {
-            db.run(
-              `UPDATE Risks 
-               SET resolved_at = ?
-               WHERE nodeID = ?
-               AND risk_type = ?
-               AND timestamp = ?
-               AND resolved_at IS NULL`,
-              [timestamp, nodeID, incidentStart.risk_type, incidentStart.timestamp],
-              function(err) {
-                if (err) reject(err);
-                else {
-                  const emoji = incidentStart.risk_type === 'fire' ? '🔥' : incidentStart.risk_type === 'chainsaw' ? '🪚' : '🔫';
-                  console.log(`✅ ${incidentStart.risk_type} incident RESOLVED (${this.changes} alerts closed)`);
-                  
-                  wsClients.forEach((client) => {
-                    if (client.readyState === 1) {
-                      client.send(JSON.stringify({
-                        event: `${incidentStart.risk_type}_resolved`,
-                        timestamp,
-                        data: { 
-                          nodeID,
-                          risk_type: incidentStart.risk_type,
-                          incidentTimestamp: incidentStart.timestamp,
-                          alertsResolved: this.changes
-                        }
-                      }));
-                    }
-                  });
-                  
-                  resolve();
-                }
-              }
-            );
-          });
-        } else {
-          await new Promise((resolve, reject) => {
-            db.run(
-              `UPDATE Risks 
-               SET cooldown_counter = ?,
-                   updated_at = ?
-               WHERE riskID = ?`,
-              [newCounter, timestamp, incidentStart.riskID],
-              (err) => {
-                if (err) reject(err);
-                else {
-                  const emoji = incidentStart.risk_type === 'fire' ? '🔥' : incidentStart.risk_type === 'chainsaw' ? '🪚' : '🔫';
-                  console.log(`${emoji} ${incidentStart.risk_type} incident cooldown: ${newCounter}/5`);
-                  
-                  wsClients.forEach((client) => {
-                    if (client.readyState === 1) {
-                      client.send(JSON.stringify({
-                        event: `${incidentStart.risk_type}_cooldown_update`,
-                        timestamp,
-                        data: { 
-                          nodeID,
-                          risk_type: incidentStart.risk_type,
-                          cooldown_counter: newCounter,
-                          incidentTimestamp: incidentStart.timestamp
-                        }
-                      }));
-                    }
-                  });
-                  
-                  resolve();
-                }
-              }
-            );
-          });
-        }
-      }
-
-      // Always insert reading
+      // Insert reading without auto-resolving alerts
+      // Alerts remain active until manually resolved
       const readingID = await new Promise((resolve, reject) => {
         db.run(
           `INSERT INTO Readings (nodeID, timestamp, temperature, humidity, co_level)
            VALUES (?, ?, ?, ?, ?)`,
-          [nodeID, timestamp, data?.temp_humid?.temperature, data?.temp_humid?.humidity, data?.gas?.co_ppm],
+          [nodeID, timestamp, sensorData?.temp_humid?.temperature, sensorData?.temp_humid?.humidity, sensorData?.gas?.co_ppm],
           function(err) {
             if (err) reject(err);
             else {
@@ -375,11 +287,11 @@ router.post("/", async (req, res) => {
         );
       });
 
-      if (data?.gps && readingID) {
+      if (sensorData?.gps && readingID) {
         db.run(
           `INSERT INTO GPSData (readingID, latitude, longitude, altitude, fix)
            VALUES (?, ?, ?, ?, ?)`,
-          [readingID, data.gps.latitude, data.gps.longitude, data.gps.altitude, data.gps.fix ? 1 : 0],
+          [readingID, sensorData.gps.latitude, sensorData.gps.longitude, sensorData.gps.altitude, sensorData.gps.fix ? 1 : 0],
           (err) => {
             if (err) console.error("❌ Error saving GPS data:", err);
           }
@@ -395,10 +307,10 @@ router.post("/", async (req, res) => {
             data: {
               readingID,
               nodeID,
-              temperature: data?.temp_humid?.temperature,
-              humidity: data?.temp_humid?.humidity,
-              co_level: data?.gas?.co_ppm,
-              location: data?.gps,
+              temperature: sensorData?.temp_humid?.temperature,
+              humidity: sensorData?.temp_humid?.humidity,
+              co_level: sensorData?.gas?.co_ppm,
+              location: sensorData?.gps,
               rssi, // ✅ Include signal data
               snr
             }

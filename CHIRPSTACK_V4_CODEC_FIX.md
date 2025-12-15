@@ -1,0 +1,187 @@
+# ChirpStack v4 Codec Structure Fix
+
+## The Issue
+
+ChirpStack v4 has specific requirements for codec return values. The codec MUST return an object with a `data` property. When a codec returns:
+
+```javascript
+return {
+  data: {
+    type: "reading",
+    nodeID: 2,
+    temp_humid: { temperature: 26.1, humidity: 61.8 },
+    gas: { co_ppm: 3.0 },
+    gps: { latitude: null, longitude: null, altitude: null, fix: false }
+  }
+};
+```
+
+ChirpStack v4 **unwraps** the `data` object and places its contents at the root of the `object` field, resulting in:
+
+```json
+"object": {
+  "type": "reading",
+  "nodeID": 2,
+  "temp_humid": { "temperature": 26.1, "humidity": 61.8 },
+  "gas": { "co_ppm": 3.0 },
+  "gps": { "latitude": null, "longitude": null, "altitude": null, "fix": false }
+}
+```
+
+✅ **All fields preserved!**
+
+## The Root Cause
+
+ChirpStack v4's codec execution behavior:
+1. **Requires** the codec to return an object with a `data` property
+2. Takes the contents of the `data` property
+3. **Unwraps** it and places the contents in `req.body.object`
+4. If no `data` property exists, returns error: "decodeUplink did not return 'data'"
+
+## The Solution
+
+### V2 Codec (CHIRPSTACK_CODEC_CORRECTED_V2.js)
+
+Return everything inside a `data` property wrapper:
+
+```javascript
+return {
+  data: {
+    type: "reading",          // ✅ Inside data wrapper
+    nodeID: 2,                // ✅ Inside data wrapper
+    temp_humid: {             // ✅ Inside data wrapper
+      temperature: 26.1,
+      humidity: 61.8
+    },
+    gas: {                    // ✅ Inside data wrapper
+      co_ppm: 3.0
+    },
+    gps: {                    // ✅ Inside data wrapper
+      latitude: null,
+      longitude: null,
+      altitude: null,
+      fix: false
+    }
+  }
+};
+```
+
+This results in ChirpStack's `object` field containing:
+
+```json
+"object": {
+  "type": "reading",
+  "nodeID": 2,
+  "temp_humid": { "temperature": 26.1, "humidity": 61.8 },
+  "gas": { "co_ppm": 3.0 },
+  "gps": { "latitude": null, "longitude": null, "altitude": null, "fix": false }
+}
+```
+
+✅ **All fields preserved after unwrapping!**
+
+### Server Update
+
+The server now supports **both codec structures** (nested and flat):
+
+```javascript
+// Extract type, nodeID, and optional 'data' wrapper
+const { type, nodeID, data } = payload;
+
+// Support both structures:
+// V1 (nested): { type, nodeID, data: { temp_humid, gas, gps } }
+// V2 (flat): { type, nodeID, temp_humid, gas, gps }
+const sensorData = data || payload;
+
+// Now access sensor data consistently:
+sensorData.temp_humid.temperature
+sensorData.gas.co_ppm
+sensorData.gps.latitude
+```
+
+## Deployment Instructions
+
+### 1. Deploy V2 Codec to ChirpStack
+
+1. Navigate to: **Tenant → Device Profiles → "Sensor (ABP)" → Codec tab**
+2. **Completely replace** the existing codec with `CHIRPSTACK_CODEC_CORRECTED_V2.js`
+3. Click **"Submit"** to save
+4. **Test immediately** using ChirpStack's built-in **"Test decoder"** button:
+   - Input: `{"type":"reading","nodeID":2,"temp":26.1,"humidity":61.8,"co_ppm":3.0,"latitude":null,"longitude":null,"altitude":null,"gps_fix":false}`
+   - Expected output should show `type` and `nodeID` at root level
+5. **Restart ChirpStack** to clear codec cache:
+   ```bash
+   docker-compose restart chirpstack
+   # OR
+   sudo systemctl restart chirpstack
+   ```
+
+### 2. Restart Server
+
+```bash
+cd server
+npm start
+```
+
+### 3. Verify End-to-End
+
+Send a packet from your sensor node and check:
+
+**ChirpStack Events:**
+```json
+"object": {
+  "type": "reading",  // ✅ Should be present
+  "nodeID": 2,        // ✅ Should be present
+  "temp_humid": {...},
+  "gas": {...},
+  "gps": {...}
+}
+```
+
+**Server Logs:**
+```
+📥 Received LoRa payload: { type: 'reading', nodeID: 2, rssi: -84, snr: 11.8 }
+✅ Reading saved - readingID: 16
+```
+
+✅ **Success!** `type` and `nodeID` are now defined.
+
+## Troubleshooting
+
+### Still seeing `type: undefined, nodeID: undefined`?
+
+1. **Check ChirpStack codec location**: Must be in Device Profile, not Application
+2. **Verify device profile**: Go to Devices → SensorNode02 → Configuration → Check "Device Profile" matches where you deployed the codec
+3. **Clear browser cache**: ChirpStack UI may cache old event data
+4. **Check for errors**: ChirpStack Events tab → Look for `errors` array in uplink JSON
+5. **Test the codec**: Use ChirpStack's built-in test function to verify codec works in isolation
+
+### Codec test passes but real packets still broken?
+
+- **Restart ChirpStack**: Old codec may be cached in memory
+- **Check packet encryption**: ABP credentials must match between sensor and ChirpStack
+- **Verify fPort**: Codec may be configured for specific fPort (should be fPort 1)
+- **Check JSON format**: Python script must send valid JSON with `type` and `nodeID` fields
+
+## Why This Happened
+
+ChirpStack v4 changed codec behavior compared to v3:
+- **ChirpStack v3**: Codec return value → `object` field (1:1 mapping)
+- **ChirpStack v4**: Codec return value → Special handling of `data` property → Unwrapped `object` field
+
+This is likely intended for consistency with LoRaWAN standard payloads, but creates issues when you need metadata fields like `type` and `nodeID` alongside sensor data.
+
+## Backward Compatibility
+
+The server now supports **both** codec versions:
+- ✅ V1 (nested): `{ type, nodeID, data: { temp_humid, gas, gps } }`
+- ✅ V2 (flat): `{ type, nodeID, temp_humid, gas, gps }`
+
+You can deploy V2 without changing the server code, and it will work with both structures.
+
+## Related Files
+
+- **CHIRPSTACK_CODEC_CORRECTED_V2.js** - Production codec (use this)
+- **CHIRPSTACK_CODEC_CORRECTED.js** - Legacy codec (nested structure, doesn't work with ChirpStack v4)
+- **server/routes/lora.js** - Server endpoint with dual-structure support
+- **CHIRPSTACK_CODEC_DEPLOYMENT.md** - Detailed deployment troubleshooting
