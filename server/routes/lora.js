@@ -220,25 +220,6 @@ router.post("/", async (req, res) => {
           );
         });
 
-        if (ongoingIncident) {
-          await new Promise((resolve, reject) => {
-            db.run(
-              `UPDATE Risks 
-               SET cooldown_counter = 0,
-                   updated_at = ?
-               WHERE riskID = ?`,
-              [timestamp, ongoingIncident.riskID],
-              (err) => {
-                if (err) reject(err);
-                else {
-                  console.log(`   ↳ Reset cooldown for incident start riskID: ${ongoingIncident.riskID}`);
-                  resolve();
-                }
-              }
-            );
-          });
-        }
-
         if (sensorData?.gps && riskID) {
           db.run(
             `INSERT INTO GPSData (riskID, latitude, longitude, altitude, fix)
@@ -286,102 +267,11 @@ router.post("/", async (req, res) => {
       console.log(`📤 Broadcasted ${processedRisks.length} risk(s)`);
     }
     // ========================================
-    // HANDLE READINGS (cooldown for all risk types)
+    // HANDLE READINGS
     // ========================================
     else if (type === "reading") {
-      // Check for all unresolved incidents (all risk types)
-      const activeIncidents = await new Promise((resolve, reject) => {
-        db.all(
-          `SELECT * FROM Risks 
-           WHERE nodeID = ? 
-           AND resolved_at IS NULL
-           AND is_incident_start = 1
-           ORDER BY timestamp DESC`,
-          [nodeID],
-          (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows || []);
-          }
-        );
-      });
-
-      for (const incidentStart of activeIncidents) {
-        const newCounter = incidentStart.cooldown_counter + 1;
-        
-        if (newCounter >= 5) {
-          await new Promise((resolve, reject) => {
-            db.run(
-              `UPDATE Risks 
-               SET resolved_at = ?
-               WHERE nodeID = ?
-               AND risk_type = ?
-               AND timestamp = ?
-               AND resolved_at IS NULL`,
-              [timestamp, nodeID, incidentStart.risk_type, incidentStart.timestamp],
-              function(err) {
-                if (err) reject(err);
-                else {
-                  const emoji = incidentStart.risk_type === 'fire' ? '🔥' : incidentStart.risk_type === 'chainsaw' ? '🪚' : '🔫';
-                  console.log(`✅ ${incidentStart.risk_type} incident RESOLVED (${this.changes} alerts closed)`);
-                  
-                  wsClients.forEach((client) => {
-                    if (client.readyState === 1) {
-                      client.send(JSON.stringify({
-                        event: `${incidentStart.risk_type}_resolved`,
-                        timestamp,
-                        data: { 
-                          nodeID,
-                          risk_type: incidentStart.risk_type,
-                          incidentTimestamp: incidentStart.timestamp,
-                          alertsResolved: this.changes
-                        }
-                      }));
-                    }
-                  });
-                  
-                  resolve();
-                }
-              }
-            );
-          });
-        } else {
-          await new Promise((resolve, reject) => {
-            db.run(
-              `UPDATE Risks 
-               SET cooldown_counter = ?,
-                   updated_at = ?
-               WHERE riskID = ?`,
-              [newCounter, timestamp, incidentStart.riskID],
-              (err) => {
-                if (err) reject(err);
-                else {
-                  const emoji = incidentStart.risk_type === 'fire' ? '🔥' : incidentStart.risk_type === 'chainsaw' ? '🪚' : '🔫';
-                  console.log(`${emoji} ${incidentStart.risk_type} incident cooldown: ${newCounter}/5`);
-                  
-                  wsClients.forEach((client) => {
-                    if (client.readyState === 1) {
-                      client.send(JSON.stringify({
-                        event: `${incidentStart.risk_type}_cooldown_update`,
-                        timestamp,
-                        data: { 
-                          nodeID,
-                          risk_type: incidentStart.risk_type,
-                          cooldown_counter: newCounter,
-                          incidentTimestamp: incidentStart.timestamp
-                        }
-                      }));
-                    }
-                  });
-                  
-                  resolve();
-                }
-              }
-            );
-          });
-        }
-      }
-
-      // Always insert reading
+      // Insert reading without auto-resolving alerts
+      // Alerts remain active until manually resolved
       const readingID = await new Promise((resolve, reject) => {
         db.run(
           `INSERT INTO Readings (nodeID, timestamp, temperature, humidity, co_level)
